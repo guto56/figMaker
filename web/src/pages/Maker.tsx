@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { AudioEditor, fmt, type AudioClip } from '../components/AudioEditor'
+import { AudioEditor, actx, fmt, type AudioClip } from '../components/AudioEditor'
 import { MemeSearch, type Picked } from '../components/MemeSearch'
 import { getSticker, publishSticker, toSticker, type RemoteSticker } from '../lib/api'
 import { SoundIcon, useSound, useUrl } from '../components/StickerTile'
-import { canvasToWebp, defaultLayout, loadImage, renderStatic, textOverlay, type Layout } from '../lib/compose'
+import { arrange, canvasToWebp, defaultLayout, hitTest, layerImg, loadImage, newLayer, renderStatic, textOverlay, type Arrange, type ImgLayer, type Layout } from '../lib/compose'
 import { LIMITS, getFFmpeg, mediaDuration, toAnimatedWebp, toOpus, toWav } from '../lib/ffmpeg'
 import { SEED } from '../lib/seed'
 import { asBlob, download, getMine, newId, saveSticker, shareSticker, slug, zipStickers, type Sticker } from '../lib/store'
@@ -19,9 +19,9 @@ export default function Maker() {
   const [params] = useSearchParams()
   const [tab, setTab] = useState<Tab>('origem')
   const [mode, setMode] = useState<'image' | 'video' | null>(null)
-  const [original, setOriginal] = useState<HTMLImageElement | null>(null)
-  const [cutout, setCutout] = useState<HTMLImageElement | null>(null)
-  const [useCut, setUseCut] = useState(false)
+  const [layers, setLayers] = useState<ImgLayer[]>([])
+  const [selId, setSelId] = useState<string | null>(null)
+  const [arr, setArr] = useState<Arrange>('livre')
   const [video, setVideo] = useState<Video | null>(null)
   const [layout, setLayout] = useState<Layout>(defaultLayout())
   const [audio, setAudio] = useState<AudioClip | null>(null)
@@ -37,51 +37,69 @@ export default function Maker() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const overlayRef = useRef<HTMLCanvasElement>(null)
   const vidRef = useRef<HTMLVideoElement>(null)
-  const drag = useRef<{ x: number; y: number; lx: number; ly: number } | null>(null)
+  const drag = useRef<{ id: string; x: number; y: number; lx: number; ly: number } | null>(null)
+  const pointers = useRef(new Map<number, { x: number; y: number }>())
+  const pinch = useRef<{ d: number; scale: number } | null>(null)
 
-  const img = useCut && cutout ? cutout : original
+  const sel = layers.find((l) => l.id === selId) ?? layers[layers.length - 1] ?? null
+  const MAX_LAYERS = 8
 
-  // desenha a prévia
+  // desenha a prévia (com a imagem escolhida marcada)
   useEffect(() => {
-    if (mode === 'image' && canvasRef.current) renderStatic(canvasRef.current, img, layout)
-    if (mode === 'video' && overlayRef.current) renderStatic(overlayRef.current, null, { ...defaultLayout(), text: layout.text })
-  }, [mode, img, layout])
+    if (mode === 'image' && canvasRef.current) renderStatic(canvasRef.current, layers, layout, sel?.id)
+    if (mode === 'video' && overlayRef.current) renderStatic(overlayRef.current, [], { ...defaultLayout(), text: layout.text })
+  }, [mode, layers, layout, sel?.id])
 
   // qualquer mudança invalida o resultado gerado
   useEffect(() => {
     setResult(null)
     setSaved('')
     setPublished(null)
-  }, [img, layout, video?.start, video?.length, video?.fit, video?.speed, audio])
+  }, [layers, layout, video?.start, video?.length, video?.fit, video?.speed, audio])
 
   // fontes podem chegar depois do primeiro desenho
   useEffect(() => {
     document.fonts?.ready.then(() => setLayout((l) => ({ ...l })))
   }, [])
 
-  const setImage = useCallback(async (blob: Blob, label: string) => {
+  /** Adiciona imagens como camadas. Com mais de uma, organiza lado a lado e redimensiona. */
+  const addImages = useCallback(async (items: Array<{ blob: Blob; label: string }>, replace = false) => {
     setErr('')
-    try {
-      const im = await loadImage(blob)
-      setOriginal(im)
-      setCutout(null)
-      setUseCut(false)
+    const loaded: ImgLayer[] = []
+    for (const it of items) {
+      try {
+        loaded.push(newLayer(await loadImage(it.blob), it.label.replace(/\.[a-z0-9]+$/i, '').slice(0, 40)))
+      } catch {
+        setErr(`"${it.label}" não abriu como imagem.`)
+      }
+    }
+    if (!loaded.length) return
+    const base = replace || mode !== 'image' ? [] : layers
+    const room = MAX_LAYERS - base.length
+    if (loaded.length > room) setErr(`Cabem até ${MAX_LAYERS} imagens na mesma figurinha.`)
+    const next = [...base, ...loaded.slice(0, Math.max(0, room))]
+    if (next.length === base.length) return
+    const mode2: Arrange = next.length === 1 ? 'livre' : base.length <= 1 && arr === 'livre' ? (next.length > 3 ? 'grade' : 'lado') : arr
+    const outline = mode !== 'image' || replace ? 0 : layout.outline
+    setArr(mode2)
+    setLayers(arrange(next, mode2, outline))
+    setSelId(next[next.length - 1].id)
+    if (mode !== 'image' || replace) {
       setVideo(null)
       setMode('image')
       setLayout(defaultLayout())
-      if (!name) setName(label.replace(/\.[a-z0-9]+$/i, '').slice(0, 40))
-      setTab('editar')
-    } catch {
-      setErr('Esse arquivo não abriu como imagem.')
     }
-  }, [name])
+    if (!name) setName(loaded[0].name)
+    setTab('editar')
+  }, [arr, layers, layout.outline, mode, name])
+
+  const setImage = (blob: Blob, label: string) => addImages([{ blob, label }])
 
   const setVideoFile = async (file: File, label?: string) => {
     setErr('')
     const duration = await mediaDuration(file)
     setVideo({ file, url: URL.createObjectURL(file), duration, start: 0, length: Math.min(duration, LIMITS.maxSeconds), fit: file.type.includes('gif') ? 'fit' : 'crop', speed: 1 })
-    setOriginal(null)
-    setCutout(null)
+    setLayers([])
     setMode('video')
     setLayout(defaultLayout())
     if (!name) setName((label ?? file.name.replace(/\.[a-z0-9]+$/i, '')).slice(0, 40))
@@ -91,18 +109,21 @@ export default function Maker() {
       toWav(file)
         .then(async (wav) => {
           const ab = await wav.arrayBuffer()
-          const b = await new AudioContext().decodeAudioData(ab)
+          const b = await actx().decodeAudioData(ab)
           setAudio({ wav, name: 'Áudio do vídeo', duration: b.duration, start: 0, length: Math.min(b.duration, LIMITS.maxSeconds), volume: 1, fade: true })
         })
         .catch(() => {})
     }
   }
 
-  const onFile = (f?: File | null) => {
-    if (!f) return
-    if (f.type.startsWith('video/') || f.type === 'image/gif') return setVideoFile(f)
-    if (f.type.startsWith('image/')) return setImage(f, f.name)
-    setErr('Use uma imagem (PNG, JPG, WebP), um GIF ou um vídeo.')
+  const onFiles = (list?: FileList | File[] | null) => {
+    const files = Array.from(list ?? [])
+    if (!files.length) return
+    const vid = files.find((f) => f.type.startsWith('video/') || f.type === 'image/gif')
+    if (vid && files.length === 1) return setVideoFile(vid)
+    const imgs = files.filter((f) => f.type.startsWith('image/') && f.type !== 'image/gif')
+    if (imgs.length) return addImages(imgs.map((f) => ({ blob: f, label: f.name })))
+    setErr(vid ? 'Vídeo e GIF entram sozinhos na figurinha. Escolha um de cada vez.' : 'Use uma imagem (PNG, JPG, WebP), um GIF ou um vídeo.')
   }
 
   const onPicked = (p: Picked) => {
@@ -120,13 +141,13 @@ export default function Maker() {
     ;(async () => {
       const s: Sticker | undefined = SEED.find((x) => x.id === id) ?? (id.startsWith('r-') ? toSticker(await getSticker(id.slice(2))) : await getMine(id))
       if (!s) return
-      await setImage(await asBlob(s.webp), s.name)
+      await addImages([{ blob: await asBlob(s.webp), label: s.name }], true)
       setName(s.name)
       setTags(s.tags.join(', '))
       if (s.ogg) {
         const wav = await toWav(await asBlob(s.ogg)).catch(() => null)
         if (wav) {
-          const b = await new AudioContext().decodeAudioData(await wav.arrayBuffer())
+          const b = await actx().decodeAudioData(await wav.arrayBuffer())
           setAudio({ wav, name: 'Som da figurinha', duration: b.duration, start: 0, length: Math.min(b.duration, LIMITS.maxSeconds), volume: 1, fade: false })
         }
       }
@@ -136,12 +157,20 @@ export default function Maker() {
   // colar imagem com Ctrl+V
   useEffect(() => {
     const h = (e: ClipboardEvent) => {
-      const f = Array.from(e.clipboardData?.files ?? [])[0]
-      if (f) onFile(f)
+      const fs = Array.from(e.clipboardData?.files ?? [])
+      if (fs.length) onFiles(fs)
     }
     window.addEventListener('paste', h)
     return () => window.removeEventListener('paste', h)
   })
+
+  // libera a URL do vídeo anterior
+  useEffect(() => {
+    const u = video?.url
+    return () => {
+      if (u) URL.revokeObjectURL(u)
+    }
+  }, [video?.url])
 
   // vídeo da prévia toca só o trecho escolhido
   useEffect(() => {
@@ -156,14 +185,20 @@ export default function Maker() {
     return () => v.removeEventListener('timeupdate', t)
   }, [video?.start, video?.length, video?.speed, video?.url])
 
+  const L = (id: string, p: Partial<ImgLayer>) => setLayers((ls) => ls.map((l) => (l.id === id ? { ...l, ...p } : l)))
+  const relayout = (mode2: Arrange, ls = layers, outline = layout.outline) => {
+    setArr(mode2)
+    setLayers(arrange(ls, mode2, outline))
+  }
+
   const removeBg = async () => {
-    if (!original) return
-    if (cutout) return setUseCut(!useCut)
+    if (!sel) return
+    if (sel.cutout) return L(sel.id, { useCut: !sel.useCut })
     setErr('')
     setBusy('Baixando o modelo de remoção de fundo (só na primeira vez)…')
     try {
       const { removeBackground } = await import('@imgly/background-removal')
-      const src = await fetch(original.src).then((r) => r.blob())
+      const src = await fetch(sel.original.src).then((r) => r.blob())
       const out = await removeBackground(src, {
         model: 'isnet_quint8',
         progress: (key: string, cur: number, total: number) => {
@@ -171,14 +206,47 @@ export default function Maker() {
           else setBusy('Tirando o fundo…')
         },
       })
-      setCutout(await loadImage(out))
-      setUseCut(true)
-      setLayout((l) => ({ ...l, outline: l.outline || 10 }))
+      const cutImg = await loadImage(out)
+      const id = sel.id
+      const outline = layout.outline || 10
+      setLayers((ls) => arrange(ls.map((l) => (l.id === id ? { ...l, cutout: cutImg, useCut: true } : l)), arr, outline))
+      setLayout((l) => ({ ...l, outline }))
     } catch {
       setErr('Não deu para tirar o fundo neste aparelho. Tente uma imagem menor ou outro navegador.')
     } finally {
       setBusy('')
     }
+  }
+
+  const reset = () => {
+    setMode(null)
+    setLayers([])
+    setSelId(null)
+    setArr('livre')
+    setVideo(null)
+    setAudio(null)
+    setResult(null)
+    setName('')
+    setTags('')
+    setLayout(defaultLayout())
+    setTab('origem')
+  }
+  const removeLayer = (id: string) => {
+    const next = layers.filter((l) => l.id !== id)
+    if (!next.length) return reset()
+    if (next.length === 1) {
+      setArr('livre')
+      setLayers([{ ...next[0], x: 0, y: 0, scale: 1, rotate: 0 }])
+    } else relayout(arr, next)
+    setSelId(next[next.length - 1].id)
+  }
+  const moveLayer = (id: string, dir: 1 | -1) => {
+    const i = layers.findIndex((l) => l.id === id)
+    const j = i + dir
+    if (i < 0 || j < 0 || j >= layers.length) return
+    const next = [...layers]
+    ;[next[i], next[j]] = [next[j], next[i]]
+    setLayers(arr === 'livre' ? next : arrange(next, arr, layout.outline))
   }
 
   const generate = async () => {
@@ -203,8 +271,9 @@ export default function Maker() {
         })
       } else {
         setBusy('Gerando a imagem…')
-        renderStatic(canvasRef.current!, img, layout)
-        webp = await canvasToWebp(canvasRef.current!)
+        const out = document.createElement('canvas')
+        renderStatic(out, layers, layout)
+        webp = await canvasToWebp(out)
       }
       let ogg: Blob | null = null
       if (audio) {
@@ -230,23 +299,61 @@ export default function Maker() {
       createdAt: Date.now(),
     }
 
+  const toCanvas = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const r = e.currentTarget.getBoundingClientRect()
+    return { px: ((e.clientX - r.left) / r.width) * LIMITS.size, py: ((e.clientY - r.top) / r.height) * LIMITS.size }
+  }
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (mode !== 'image') return
     e.currentTarget.setPointerCapture(e.pointerId)
-    drag.current = { x: e.clientX, y: e.clientY, lx: layout.x, ly: layout.y }
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (pointers.current.size === 2 && sel) {
+      const [a, b] = [...pointers.current.values()]
+      pinch.current = { d: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), scale: sel.scale }
+      drag.current = null
+      return
+    }
+    const { px, py } = toCanvas(e)
+    const hit = hitTest(layers, px, py) ?? sel
+    if (!hit) return
+    setSelId(hit.id)
+    drag.current = { id: hit.id, x: e.clientX, y: e.clientY, lx: hit.x, ly: hit.y }
   }
   const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!pointers.current.has(e.pointerId)) return
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (pinch.current && sel && pointers.current.size === 2) {
+      const [a, b] = [...pointers.current.values()]
+      const k = Math.hypot(a.x - b.x, a.y - b.y) / pinch.current.d
+      if (arr !== 'livre') setArr('livre')
+      L(sel.id, { scale: Math.min(4, Math.max(0.1, pinch.current.scale * k)) })
+      return
+    }
     const d = drag.current
     if (!d) return
     const k = LIMITS.size / e.currentTarget.clientWidth
-    setLayout((l) => ({ ...l, x: d.lx + (e.clientX - d.x) * k, y: d.ly + (e.clientY - d.y) * k }))
+    if (arr !== 'livre' && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 3) setArr('livre')
+    L(d.id, { x: d.lx + (e.clientX - d.x) * k, y: d.ly + (e.clientY - d.y) * k })
   }
-  const onWheel = (e: React.WheelEvent) => {
-    if (mode !== 'image') return
-    setLayout((l) => ({ ...l, scale: Math.min(4, Math.max(0.2, l.scale * (e.deltaY < 0 ? 1.05 : 0.95))) }))
+  const onPointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    pointers.current.delete(e.pointerId)
+    if (pointers.current.size < 2) pinch.current = null
+    drag.current = null
   }
+  // zoom com a roda do mouse sem rolar a página
+  useEffect(() => {
+    const c = canvasRef.current
+    if (!c) return
+    const h = (e: WheelEvent) => {
+      if (!sel) return
+      e.preventDefault()
+      if (arr !== 'livre') setArr('livre')
+      L(sel.id, { scale: Math.min(4, Math.max(0.1, sel.scale * (e.deltaY < 0 ? 1.05 : 0.95))) })
+    }
+    c.addEventListener('wheel', h, { passive: false })
+    return () => c.removeEventListener('wheel', h)
+  })
 
-  const L = (p: Partial<Layout>) => setLayout((l) => ({ ...l, ...p }))
   const T = (p: Partial<Layout['text']>) => setLayout((l) => ({ ...l, text: { ...l.text, ...p } }))
   const V = (p: Partial<Video>) => setVideo((v) => (v ? { ...v, ...p } : v))
 
@@ -272,7 +379,7 @@ export default function Maker() {
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
               e.preventDefault()
-              onFile(e.dataTransfer.files?.[0])
+              onFiles(e.dataTransfer.files)
             }}
           >
             {mode === 'image' && (
@@ -281,37 +388,41 @@ export default function Maker() {
                 className="h-full w-full cursor-grab touch-none active:cursor-grabbing"
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
-                onPointerUp={() => (drag.current = null)}
-                onWheel={onWheel}
-                aria-label="Prévia da figurinha. Arraste para mover."
+                onPointerUp={onPointerUp}
+                onPointerCancel={onPointerUp}
+                aria-label="Prévia da figurinha. Toque numa imagem para escolher e arraste para mover."
               />
             )}
             {mode === 'video' && video && (
               <>
-                <video
-                  ref={vidRef}
-                  src={video.url}
-                  autoPlay
-                  muted
-                  loop
-                  playsInline
-                  className={`h-full w-full ${video.fit === 'crop' ? 'object-cover' : 'object-contain'}`}
-                />
+                {video.file.type.includes('gif') ? (
+                  <img src={video.url} alt="" className={`h-full w-full ${video.fit === 'crop' ? 'object-cover' : 'object-contain'}`} />
+                ) : (
+                  <video
+                    ref={vidRef}
+                    src={video.url}
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                    className={`h-full w-full ${video.fit === 'crop' ? 'object-cover' : 'object-contain'}`}
+                  />
+                )}
                 <canvas ref={overlayRef} className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true" />
               </>
             )}
             {!hasSource && (
               <label className="absolute inset-0 flex cursor-pointer flex-col items-center justify-center gap-3 p-8 text-center">
                 <img src="/seed/sapo.webp" alt="" className="h-24 w-24 opacity-90" />
-                <span className="text-lg">Solte aqui uma imagem, GIF ou vídeo</span>
-                <span className="text-muted">ou toque para escolher. Também dá para colar com Ctrl+V.</span>
-                <input type="file" accept="image/*,video/*" className="sr-only" onChange={(e) => onFile(e.target.files?.[0])} />
+                <span className="text-lg">Solte aqui imagens, um GIF ou um vídeo</span>
+                <span className="text-muted">ou toque para escolher. Dá para escolher várias fotos de uma vez e colar com Ctrl+V.</span>
+                <input type="file" accept="image/*,video/*" multiple className="sr-only" onChange={(e) => { onFiles(e.target.files); e.target.value = '' }} />
               </label>
             )}
           </div>
           {hasSource && (
             <div className="mx-auto mt-3 flex max-w-[460px] flex-wrap items-center justify-between gap-2 text-sm text-muted">
-              <span>{mode === 'image' ? 'Arraste para mover. Role ou use o zoom para aumentar.' : `Trecho de ${fmt(video?.length ?? 0)} em loop`}</span>
+              <span>{mode === 'image' ? (layers.length > 1 ? 'Toque numa imagem para escolher e arraste para mover. Dois dedos ou a roda do mouse mudam o tamanho.' : 'Arraste para mover. Dois dedos ou a roda do mouse mudam o tamanho.') : video?.file.type.includes('gif') ? 'GIF animado (até 10 s)' : `Trecho de ${fmt(video?.length ?? 0)} em loop`}</span>
               {audio && <span className="inline-flex items-center gap-1 text-accent"><SoundIcon /> {fmt(audio.length)}</span>}
             </div>
           )}
@@ -346,14 +457,14 @@ export default function Maker() {
               <div className="grid gap-6">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="panel flex cursor-pointer flex-col gap-1 p-5 transition hover:ring-ink">
-                    <span className="text-xl">Imagem ou foto</span>
-                    <span className="text-muted">PNG, JPG, WebP ou print. Dá para tirar o fundo.</span>
-                    <input type="file" accept="image/png,image/jpeg,image/webp,image/heic" className="sr-only" onChange={(e) => onFile(e.target.files?.[0])} />
+                    <span className="text-xl">{layers.length ? 'Mais imagens' : 'Imagens ou fotos'}</span>
+                    <span className="text-muted">{layers.length ? 'Entram junto com as que já estão na figurinha.' : 'Uma ou várias: lado a lado, uma sobre a outra ou do seu jeito.'}</span>
+                    <input type="file" accept="image/png,image/jpeg,image/webp,image/heic" multiple className="sr-only" onChange={(e) => { onFiles(e.target.files); e.target.value = '' }} />
                   </label>
                   <label className="panel flex cursor-pointer flex-col gap-1 p-5 transition hover:ring-ink">
                     <span className="text-xl">Vídeo ou GIF</span>
                     <span className="text-muted">Vira figurinha animada. O som do vídeo já vem junto.</span>
-                    <input type="file" accept="video/*,image/gif" className="sr-only" onChange={(e) => onFile(e.target.files?.[0])} />
+                    <input type="file" accept="video/*,image/gif" className="sr-only" onChange={(e) => { onFiles(e.target.files); e.target.value = '' }} />
                   </label>
                 </div>
                 <div className="panel p-5">
@@ -368,16 +479,6 @@ export default function Maker() {
                   </div>
                   {showMemes && <div className="mt-4"><MemeSearch onPick={onPicked} /></div>}
                 </div>
-                <div className="panel p-5">
-                  <h2 className="text-xl">Partir de uma figurinha da galeria</h2>
-                  <div className="mt-4 grid grid-cols-4 gap-2 sm:grid-cols-6">
-                    {SEED.map((s) => (
-                      <button key={s.id} className="aspect-square rounded-xl p-1.5 ring-1 ring-line hover:ring-ink" onClick={async () => { await setImage(await asBlob(s.webp), s.name); setName(s.name) }} aria-label={`Usar ${s.name}`}>
-                        <img src={s.webp as string} alt="" className="h-full w-full object-contain" />
-                      </button>
-                    ))}
-                  </div>
-                </div>
                 <div className="rounded-xl2 border border-dashed border-line p-5 text-muted">
                   <span className="text-ink">Figurinha por IA</span> chega na próxima versão: descreva a figurinha e o Zapfig desenha.
                 </div>
@@ -387,21 +488,69 @@ export default function Maker() {
             {tab === 'editar' && (
               <div className="grid gap-6">
                 {mode === 'image' && (
-                  <section className="panel grid gap-4 p-5" aria-label="Imagem">
-                    <div className="flex flex-wrap gap-2">
-                      <button className="btn-main" onClick={removeBg} disabled={!!busy}>
-                        {cutout ? (useCut ? 'Voltar ao fundo original' : 'Usar sem fundo') : 'Tirar o fundo'}
-                      </button>
-                      <button className="btn-soft" onClick={() => L({ scale: 1, x: 0, y: 0, rotate: 0 })}>Centralizar</button>
+                  <section className="panel grid gap-4 p-5" aria-label="Imagens">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <h2 className="text-xl">Imagens ({layers.length} de {MAX_LAYERS})</h2>
+                      <label className={`btn-soft cursor-pointer ${layers.length >= MAX_LAYERS ? 'pointer-events-none opacity-40' : ''}`}>
+                        Adicionar imagem
+                        <input type="file" accept="image/png,image/jpeg,image/webp,image/heic" multiple className="sr-only" onChange={(e) => { onFiles(e.target.files); e.target.value = '' }} />
+                      </label>
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <label className="grid gap-1"><span className="label">Zoom: {Math.round(layout.scale * 100)}%</span>
-                        <input type="range" min={0.2} max={4} step={0.01} value={layout.scale} onChange={(e) => L({ scale: Number(e.target.value) })} /></label>
-                      <label className="grid gap-1"><span className="label">Girar: {Math.round(layout.rotate)}°</span>
-                        <input type="range" min={-180} max={180} step={1} value={layout.rotate} onChange={(e) => L({ rotate: Number(e.target.value) })} /></label>
-                      <label className="grid gap-1"><span className="label">Contorno branco: {layout.outline}px</span>
-                        <input type="range" min={0} max={20} step={1} value={layout.outline} onChange={(e) => L({ outline: Number(e.target.value) })} /></label>
-                    </div>
+                    {layers.length > 1 && (
+                      <>
+                        <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label="Organização">
+                          <span className="label mr-1">Organizar</span>
+                          {([['lado', 'Lado a lado'], ['pilha', 'Uma sobre a outra'], ['grade', 'Grade'], ['livre', 'Livre']] as Array<[Arrange, string]>).map(([k, label]) => (
+                            <button key={k} role="radio" aria-checked={arr === k} className="chip" onClick={() => relayout(k)}>{label}</button>
+                          ))}
+                        </div>
+                        <ul className="flex gap-2 overflow-x-auto pb-1" aria-label="Imagens, da de baixo para a de cima">
+                          {layers.map((l, i) => (
+                            <li key={l.id} className="shrink-0">
+                              <button
+                                className={`checker block h-16 w-16 overflow-hidden rounded-xl p-1 ring-1 ${sel?.id === l.id ? 'ring-2 ring-accent' : 'ring-line hover:ring-ink'}`}
+                                onClick={() => setSelId(l.id)}
+                                aria-pressed={sel?.id === l.id}
+                                aria-label={`Escolher imagem ${i + 1}: ${l.name}`}
+                              >
+                                <img src={layerImg(l).src} alt="" className="h-full w-full object-contain" />
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                    {sel && (
+                      <div className="grid gap-4 rounded-xl bg-bg p-4">
+                        <div className="flex flex-wrap gap-2">
+                          <button className="btn-main" onClick={removeBg} disabled={!!busy}>
+                            {sel.cutout ? (sel.useCut ? 'Voltar ao fundo original' : 'Usar sem fundo') : 'Tirar o fundo'}
+                          </button>
+                          <button className="btn-soft" onClick={() => L(sel.id, { flip: !sel.flip })}>Espelhar</button>
+                          {layers.length > 1 ? (
+                            <>
+                              <button className="btn-soft" onClick={() => moveLayer(sel.id, 1)} disabled={layers[layers.length - 1].id === sel.id}>Para frente</button>
+                              <button className="btn-soft" onClick={() => moveLayer(sel.id, -1)} disabled={layers[0].id === sel.id}>Para trás</button>
+                              <button className="btn-ghost text-accent" onClick={() => removeLayer(sel.id)}>Tirar esta imagem</button>
+                            </>
+                          ) : (
+                            <button className="btn-soft" onClick={() => L(sel.id, { scale: 1, x: 0, y: 0, rotate: 0 })}>Centralizar</button>
+                          )}
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <label className="grid gap-1"><span className="label">Tamanho: {Math.round(sel.scale * 100)}%</span>
+                            <input type="range" min={0.1} max={4} step={0.01} value={sel.scale} onChange={(e) => { if (arr !== 'livre') setArr('livre'); L(sel.id, { scale: Number(e.target.value) }) }} /></label>
+                          <label className="grid gap-1"><span className="label">Girar: {Math.round(sel.rotate)}°</span>
+                            <input type="range" min={-180} max={180} step={1} value={sel.rotate} onChange={(e) => { if (arr !== 'livre') setArr('livre'); L(sel.id, { rotate: Number(e.target.value) }) }} /></label>
+                        </div>
+                      </div>
+                    )}
+                    <label className="grid gap-1"><span className="label">Contorno branco em volta de tudo: {layout.outline}px</span>
+                      <input type="range" min={0} max={20} step={1} value={layout.outline} onChange={(e) => {
+                        const outline = Number(e.target.value)
+                        setLayout((l) => ({ ...l, outline }))
+                        if (arr !== 'livre') setLayers((ls) => arrange(ls, arr, outline))
+                      }} /></label>
                   </section>
                 )}
                 {mode === 'video' && video && (
@@ -544,7 +693,7 @@ export default function Maker() {
                       {saved && <p className="text-sm text-muted" role="status">Guardada neste navegador. <Link className="text-ink underline underline-offset-4" to="/galeria?aba=minhas">Ver minhas figurinhas</Link></p>}
                       <p className="text-sm text-muted">Depois de baixar, veja <Link className="text-ink underline underline-offset-4" to="/como-usar">como pôr no WhatsApp</Link>.</p>
                     </section>
-                    <button className="btn-ghost justify-self-start" onClick={() => { setMode(null); setOriginal(null); setVideo(null); setAudio(null); setResult(null); setName(''); setTags(''); setTab('origem') }}>
+                    <button className="btn-ghost justify-self-start" onClick={reset}>
                       Começar outra figurinha
                     </button>
                   </>

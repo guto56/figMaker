@@ -86,7 +86,7 @@ export function StickerDetail({ sticker, onClose, onDeleted, page }: DetailProps
             )}
           </div>
           <div className="flex flex-wrap gap-x-1">
-            {(sticker.seed || sticker.remote) && <button className="btn-ghost text-muted" onClick={() => nav(`/criar?de=${encodeURIComponent(sticker.id)}`)}>Editar uma cópia</button>}
+            {sticker.remote && <button className="btn-ghost text-muted" onClick={() => nav(`/criar?de=${encodeURIComponent(sticker.id)}`)}>Editar uma cópia</button>}
             {sticker.remote && remoteId && !canUnpublish && (
               <button className="btn-ghost text-muted" onClick={async () => { await reportSticker(remoteId); setMsg('Obrigado. Vamos revisar esta figurinha.') }}>Denunciar</button>
             )}

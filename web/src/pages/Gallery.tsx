@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { StickerDialog } from '../components/StickerDialog'
 import { StickerTile } from '../components/StickerTile'
@@ -36,6 +36,7 @@ export default function Gallery() {
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
   const [packs, setPacks] = useState<RemotePack[] | null>(null)
+  const reqId = useRef(0)
 
   useEffect(() => {
     listMine().then(setMine)
@@ -46,6 +47,7 @@ export default function Gallery() {
   }, [q])
 
   const loadRemote = async (offset: number) => {
+    const id = ++reqId.current
     setLoading(true)
     setErr('')
     try {
@@ -56,6 +58,7 @@ export default function Gallery() {
         kind: f === 'animada' ? 'animated' : f === 'estatica' ? 'static' : undefined,
         offset,
       })
+      if (id !== reqId.current) return
       const items = d.items.map(toSticker)
       setRemote((o) => (offset === 0 ? items : [...o, ...items]))
       setNext(d.next)

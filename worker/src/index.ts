@@ -258,7 +258,7 @@ async function listStickers(env: Env, url: URL) {
   const offset = Math.max(0, Number(url.searchParams.get('offset') ?? 0) | 0)
   const where = ['hidden = 0']
   const args: unknown[] = []
-  if (q) for (const w of q.split(/\s+/).slice(0, 4)) { where.push('search LIKE ?'); args.push(`%${w}%`) }
+  if (q) for (const w of q.split(/\s+/).slice(0, 4)) { where.push("search LIKE ? ESCAPE '\\'"); args.push(`%${w.replace(/[\\%_]/g, (c) => `\\${c}`)}%`) }
   if (url.searchParams.get('sound') === '1') where.push('has_sound = 1')
   const kind = url.searchParams.get('kind')
   if (kind === 'static' || kind === 'animated') { where.push('kind = ?'); args.push(kind) }
@@ -266,7 +266,7 @@ async function listStickers(env: Env, url: URL) {
     .bind(...args, limit + 1, offset)
     .all()
   const res = rows.results ?? []
-  return json({ items: res.slice(0, limit).map(stickerOut), next: res.length > limit ? offset + limit : null }, 200, { 'cache-control': 'public, max-age=20' })
+  return json({ items: res.slice(0, limit).map(stickerOut), next: res.length > limit ? offset + limit : null }, 200, { 'cache-control': 'no-cache' })
 }
 
 async function stickerRoute(req: Request, env: Env, id: string, action?: string) {
@@ -351,7 +351,7 @@ async function packRoute(req: Request, env: Env, id: string, action?: string) {
 async function listPacks(env: Env, url: URL) {
   const limit = Math.min(24, Math.max(1, Number(url.searchParams.get('limit') ?? 12) | 0))
   const rows = (await env.DB.prepare('SELECT * FROM packs WHERE hidden = 0 ORDER BY created_at DESC LIMIT ?').bind(limit).all()).results ?? []
-  return json({ items: rows.map((p) => packOut(p)) }, 200, { 'cache-control': 'public, max-age=30' })
+  return json({ items: rows.map((p) => packOut(p)) }, 200, { 'cache-control': 'no-cache' })
 }
 
 async function file(env: Env, key: string) {

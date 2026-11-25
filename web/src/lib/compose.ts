@@ -2,63 +2,141 @@ import { LIMITS, pngToWebp } from './ffmpeg'
 
 export type TextLayer = { top: string; bottom: string; size: number; color: string }
 
+/** Ajustes globais da figurinha (valem para todas as camadas). */
 export type Layout = {
-  scale: number
-  x: number
-  y: number
-  rotate: number
   outline: number
   text: TextLayer
 }
 
 export const defaultLayout = (): Layout => ({
-  scale: 1,
-  x: 0,
-  y: 0,
-  rotate: 0,
   outline: 0,
   text: { top: '', bottom: '', size: 64, color: '#ffffff' },
 })
 
-const S = LIMITS.size
+/** Uma imagem dentro da figurinha. Várias camadas podem ficar lado a lado ou uma sobre a outra. */
+export type ImgLayer = {
+  id: string
+  name: string
+  original: HTMLImageElement
+  cutout: HTMLImageElement | null
+  useCut: boolean
+  x: number
+  y: number
+  scale: number
+  rotate: number
+  flip: boolean
+}
 
-/** Escala de "encaixar" a imagem inteira dentro dos 512 px, com margem para o contorno. */
-function baseFit(w: number, h: number, outline: number) {
-  const room = S - outline * 2 - 8
+export type Arrange = 'livre' | 'lado' | 'pilha' | 'grade'
+
+const S = LIMITS.size
+const MARGIN = 8
+
+export const layerImg = (l: ImgLayer) => (l.useCut && l.cutout ? l.cutout : l.original)
+
+/** Escala de "encaixar" a imagem inteira dentro dos 512 px. */
+function baseFit(w: number, h: number) {
+  const room = S - MARGIN * 2
   return Math.min(room / w, room / h)
 }
 
-export function drawImageLayer(ctx: CanvasRenderingContext2D, img: CanvasImageSource & { width: number; height: number }, l: Layout) {
-  const k = baseFit(img.width, img.height, l.outline) * l.scale
-  const w = img.width * k
-  const h = img.height * k
+export function layerBox(l: ImgLayer) {
+  const im = layerImg(l)
+  const k = baseFit(im.width, im.height) * l.scale
+  return { w: im.width * k, h: im.height * k }
+}
 
+let seq = 0
+export function newLayer(img: HTMLImageElement, name: string): ImgLayer {
+  return { id: `l${++seq}`, name, original: img, cutout: null, useCut: false, x: 0, y: 0, scale: 1, rotate: 0, flip: false }
+}
+
+/** Organiza as camadas em colunas, linhas ou grade, redimensionando cada uma para caber. */
+export function arrange(layers: ImgLayer[], mode: Arrange, outline: number): ImgLayer[] {
+  const n = layers.length
+  if (mode === 'livre' || n === 0) return layers
+  const cols = mode === 'lado' ? n : mode === 'pilha' ? 1 : Math.ceil(Math.sqrt(n))
+  const rows = Math.ceil(n / cols)
+  const pad = outline + MARGIN
+  const cw = (S - pad * 2) / cols
+  const ch = (S - pad * 2) / rows
+  const gap = n > 1 ? outline + 4 : 0
+  return layers.map((l, i) => {
+    const im = layerImg(l)
+    const target = Math.min((cw - gap) / im.width, (ch - gap) / im.height)
+    // na última linha da grade, centraliza o que sobrou
+    const row = Math.floor(i / cols)
+    const inRow = row === rows - 1 ? n - row * cols : cols
+    const col = i % cols
+    const offset = ((cols - inRow) * cw) / 2
+    return {
+      ...l,
+      rotate: 0,
+      scale: target / baseFit(im.width, im.height),
+      x: pad + offset + (col + 0.5) * cw - S / 2,
+      y: pad + (row + 0.5) * ch - S / 2,
+    }
+  })
+}
+
+/** Camada mais acima no ponto (coordenadas do canvas, 0..512). */
+export function hitTest(layers: ImgLayer[], px: number, py: number): ImgLayer | null {
+  for (let i = layers.length - 1; i >= 0; i--) {
+    const l = layers[i]
+    const { w, h } = layerBox(l)
+    const a = (-l.rotate * Math.PI) / 180
+    const dx = px - (S / 2 + l.x)
+    const dy = py - (S / 2 + l.y)
+    const rx = dx * Math.cos(a) - dy * Math.sin(a)
+    const ry = dx * Math.sin(a) + dy * Math.cos(a)
+    if (Math.abs(rx) <= w / 2 && Math.abs(ry) <= h / 2) return l
+  }
+  return null
+}
+
+function drawLayers(layers: ImgLayer[], outline: number): HTMLCanvasElement {
   const layer = document.createElement('canvas')
   layer.width = S
   layer.height = S
   const c = layer.getContext('2d')!
-  c.save()
-  c.translate(S / 2 + l.x, S / 2 + l.y)
-  c.rotate((l.rotate * Math.PI) / 180)
-  c.drawImage(img, -w / 2, -h / 2, w, h)
-  c.restore()
-
-  if (l.outline > 0) {
-    const sil = document.createElement('canvas')
-    sil.width = S
-    sil.height = S
-    const sc = sil.getContext('2d')!
-    const steps = 24
-    for (let i = 0; i < steps; i++) {
-      const a = (i / steps) * Math.PI * 2
-      sc.drawImage(layer, Math.cos(a) * l.outline, Math.sin(a) * l.outline)
-    }
-    sc.globalCompositeOperation = 'source-in'
-    sc.fillStyle = '#ffffff'
-    sc.fillRect(0, 0, S, S)
-    ctx.drawImage(sil, 0, 0)
+  for (const l of layers) {
+    const im = layerImg(l)
+    const { w, h } = layerBox(l)
+    c.save()
+    c.translate(S / 2 + l.x, S / 2 + l.y)
+    c.rotate((l.rotate * Math.PI) / 180)
+    if (l.flip) c.scale(-1, 1)
+    c.drawImage(im, -w / 2, -h / 2, w, h)
+    c.restore()
   }
-  ctx.drawImage(layer, 0, 0)
+  if (outline <= 0) return layer
+  const out = document.createElement('canvas')
+  out.width = S
+  out.height = S
+  const oc = out.getContext('2d')!
+  const steps = 24
+  for (let i = 0; i < steps; i++) {
+    const a = (i / steps) * Math.PI * 2
+    oc.drawImage(layer, Math.cos(a) * outline, Math.sin(a) * outline)
+  }
+  oc.globalCompositeOperation = 'source-in'
+  oc.fillStyle = '#ffffff'
+  oc.fillRect(0, 0, S, S)
+  oc.globalCompositeOperation = 'source-over'
+  oc.drawImage(layer, 0, 0)
+  return out
+}
+
+function drawSelection(ctx: CanvasRenderingContext2D, l: ImgLayer) {
+  const { w, h } = layerBox(l)
+  ctx.save()
+  ctx.translate(S / 2 + l.x, S / 2 + l.y)
+  ctx.rotate((l.rotate * Math.PI) / 180)
+  ctx.lineWidth = 3
+  ctx.setLineDash([10, 7])
+  ctx.strokeStyle = '#c2501b'
+  ctx.strokeRect(-w / 2 - 3, -h / 2 - 3, w + 6, h + 6)
+  ctx.restore()
 }
 
 export function drawText(ctx: CanvasRenderingContext2D, t: TextLayer) {
@@ -85,13 +163,15 @@ export function drawText(ctx: CanvasRenderingContext2D, t: TextLayer) {
   }
 }
 
-export function renderStatic(canvas: HTMLCanvasElement, img: (CanvasImageSource & { width: number; height: number }) | null, l: Layout) {
+export function renderStatic(canvas: HTMLCanvasElement, layers: ImgLayer[], l: Layout, selectedId?: string | null) {
   canvas.width = S
   canvas.height = S
   const ctx = canvas.getContext('2d')!
   ctx.clearRect(0, 0, S, S)
-  if (img) drawImageLayer(ctx, img, l)
+  if (layers.length) ctx.drawImage(drawLayers(layers, l.outline), 0, 0)
   drawText(ctx, l.text)
+  const sel = selectedId && layers.length > 1 ? layers.find((x) => x.id === selectedId) : null
+  if (sel) drawSelection(ctx, sel)
 }
 
 /** Só o texto, em PNG transparente, para sobrepor em figurinha animada. */

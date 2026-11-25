@@ -21,7 +21,7 @@ type Props = {
 }
 
 let ctxSingleton: AudioContext | null = null
-const actx = () => (ctxSingleton ??= new AudioContext())
+export const actx = () => (ctxSingleton ??= new AudioContext())
 
 export function fmt(s: number) {
   return `${s.toFixed(1).replace('.', ',')} s`
