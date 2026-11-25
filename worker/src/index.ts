@@ -1,15 +1,58 @@
+import { DurableObject } from 'cloudflare:workers'
+import { z } from 'zod'
+
+/** Contador de janela fixa, um objeto por chave (faixa de rede + tipo de ação). */
+export class Limiter extends DurableObject {
+  private hits = new Map<string, { n: number; reset: number }>()
+  async hit(bucket: string, limit: number, windowMs: number): Promise<boolean> {
+    const now = Date.now()
+    const cur = this.hits.get(bucket)
+    if (!cur || now >= cur.reset) {
+      this.hits.set(bucket, { n: 1, reset: now + windowMs })
+      return true
+    }
+    cur.n++
+    return cur.n <= limit
+  }
+}
+
 export interface Env {
   ASSETS: Fetcher
   DB: D1Database
   FILES: KVNamespace
   AI: Ai
-  PUBLISH_LIMIT: RateLimit
+  PROXY_LIMIT: RateLimit
+  LIMITER: DurableObjectNamespace<Limiter>
   KLIPY_KEY: string
   FREESOUND_KEY: string
+  IP_SALT: string
+}
+
+/** Cabeçalhos de segurança em todas as respostas da API. */
+const SECURITY_HEADERS: Record<string, string> = {
+  'content-security-policy': "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+  'strict-transport-security': 'max-age=63072000; includeSubDomains; preload',
+  'x-content-type-options': 'nosniff',
+  'x-frame-options': 'DENY',
+  'referrer-policy': 'strict-origin-when-cross-origin',
+  'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+  'cross-origin-resource-policy': 'same-origin',
+}
+function secure(res: Response): Response {
+  const r = new Response(res.body, res)
+  for (const [k, v] of Object.entries(SECURITY_HEADERS)) r.headers.set(k, v)
+  r.headers.delete('access-control-allow-origin')
+  return r
 }
 
 const UA = 'Mozilla/5.0 (compatible; Zapfig/1.0; +https://zapfig.hrycsngb42.workers.dev)'
 const PROXY_HOSTS = ['imgflip.com', 'klipy.com', 'klipy.co', 'myinstants.com', 'freesound.org']
+
+class HttpError extends Error {
+  constructor(public status: number, message: string) {
+    super(message)
+  }
+}
 
 const json = (d: unknown, status = 200, extra: Record<string, string> = {}) =>
   new Response(JSON.stringify(d), { status, headers: { 'content-type': 'application/json; charset=utf-8', ...extra } })
@@ -76,7 +119,10 @@ async function klipy(env: Env, url: URL) {
   const qs = new URLSearchParams({ page: String(page), per_page: '24', customer_id: 'zapfig-web', locale: 'pt_BR', content_filter: 'medium' })
   if (q) qs.set('q', q)
   const r = await fetch(`${base}/${q ? 'search' : 'trending'}?${qs}`, { headers: { 'user-agent': UA }, cf: { cacheTtl: 600 } })
-  if (!r.ok) return err(`KLIPY respondeu ${r.status}`, 502)
+  if (!r.ok) {
+    console.error('klipy', r.status)
+    return err('A busca de GIFs não respondeu. Tente de novo.', 502)
+  }
   const d: any = await r.json()
   const arr = findArray(d)
   const items = arr
@@ -122,7 +168,10 @@ async function myinstants(url: URL) {
     ? `https://www.myinstants.com/pt/search/?name=${encodeURIComponent(q)}&page=${page}`
     : `https://www.myinstants.com/pt/index/br/?page=${page}`
   const r = await fetch(target, { headers: { 'user-agent': UA, 'accept-language': 'pt-BR,pt;q=0.9' }, cf: { cacheTtl: 1800 } })
-  if (!r.ok) return err(`MyInstants respondeu ${r.status}`, 502)
+  if (!r.ok) {
+    console.error('myinstants', r.status)
+    return err('A busca de sons não respondeu. Tente de novo.', 502)
+  }
   const html = await r.text()
   const items: any[] = []
   const seen = new Set<string>()
@@ -152,7 +201,10 @@ async function freesound(env: Env, url: URL) {
   })
   let r = await fetch(`https://freesound.org/apiv2/search/?${qs}`, { headers: { 'user-agent': UA }, cf: { cacheTtl: 3600 } })
   if (r.status === 404) r = await fetch(`https://freesound.org/apiv2/search/text/?${qs}`, { headers: { 'user-agent': UA }, cf: { cacheTtl: 3600 } })
-  if (!r.ok) return err(`Freesound respondeu ${r.status}`, 502)
+  if (!r.ok) {
+    console.error('freesound', r.status)
+    return err('A busca de efeitos não respondeu. Tente de novo.', 502)
+  }
   const d: any = await r.json()
   const items = (d.results ?? [])
     .filter((s: any) => s.previews?.['preview-hq-mp3'])
@@ -176,14 +228,26 @@ async function proxy(url: URL) {
   } catch {
     return err('url inválida')
   }
-  if (t.protocol !== 'https:' || !hostAllowed(t.hostname)) return err('host não permitido', 403)
-  const r = await fetch(t.toString(), { headers: { 'user-agent': UA, referer: `https://${t.hostname}/` }, cf: { cacheTtl: 2592000, cacheEverything: true } })
-  if (!r.ok) return err('upstream', 502)
-  const type = r.headers.get('content-type') ?? 'application/octet-stream'
-  if (!/^(image|video|audio)\//.test(type) && !type.includes('octet-stream')) return err('tipo não permitido', 415)
+  if (t.protocol !== 'https:' || t.username || t.password || t.port || !hostAllowed(t.hostname)) return err('host não permitido', 403)
+  // segue no máximo 3 redirecionamentos, todos dentro da lista de hosts permitidos
+  let r: Response | null = null
+  for (let hop = 0; hop < 4; hop++) {
+    r = await fetch(t.toString(), { redirect: 'manual', headers: { 'user-agent': UA, referer: `https://${t.hostname}/` }, cf: { cacheTtl: 2592000, cacheEverything: true } })
+    if (r.status < 300 || r.status >= 400) break
+    const loc = r.headers.get('location')
+    if (!loc) return err('upstream', 502)
+    t = new URL(loc, t)
+    if (t.protocol !== 'https:' || !hostAllowed(t.hostname)) return err('host não permitido', 403)
+    r = null
+  }
+  if (!r || !r.ok) return err('upstream', 502)
+  const type = (r.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase()
+  if (!/^(image\/(jpeg|png|gif|webp)|video\/(mp4|webm)|audio\/(mpeg|mp3|ogg|wav|x-wav|webm|aac|mp4))$/.test(type)) return err('tipo não permitido', 415)
   const len = Number(r.headers.get('content-length') ?? 0)
   if (len > 40 * 1024 * 1024) return err('arquivo grande demais', 413)
-  return new Response(r.body, { headers: { 'content-type': type, 'cache-control': 'public, max-age=604800', 'access-control-allow-origin': '*' } })
+  return new Response(r.body, {
+    headers: { 'content-type': type, 'cache-control': 'public, max-age=604800', 'content-disposition': 'inline' },
+  })
 }
 
 /* ---------------- galeria pública ---------------- */
@@ -197,7 +261,57 @@ async function sha(s: string) {
   return Array.from(new Uint8Array(h), (b) => b.toString(16).padStart(2, '0')).join('')
 }
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
-const ip = (req: Request) => req.headers.get('cf-connecting-ip') ?? 'x'
+/** Faixa de rede do cliente (/24 no IPv4, /64 no IPv6): trocar de IP dentro da mesma faixa não fura os limites. */
+const ip = (req: Request) => {
+  const raw = req.headers.get('cf-connecting-ip') ?? 'x'
+  if (raw.includes(':')) return raw.split(':').slice(0, 4).join(':') + '::/64'
+  const o = raw.split('.')
+  return o.length === 4 ? `${o[0]}.${o[1]}.${o[2]}.0/24` : raw
+}
+/** Limite exato por faixa de rede. */
+async function limited(env: Env, key: string, limit: number, windowMs = 60000) {
+  const stub = env.LIMITER.get(env.LIMITER.idFromName(key))
+  return !(await stub.hit(key, limit, windowMs))
+}
+const who = (req: Request, env: Env) => sha(`${env.IP_SALT}:${ip(req)}`)
+async function sameHash(a: string, b: string) {
+  const ea = new TextEncoder().encode(a)
+  const eb = new TextEncoder().encode(b)
+  if (ea.length !== eb.length) return false
+  return (crypto.subtle as unknown as { timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean }).timingSafeEqual(ea, eb)
+}
+
+// caracteres de controle e espaços repetidos saem dos textos
+const clean = (s: string) => s.replace(/[\u0000-\u001f\u007f​-‏‪-‮]/g, '').replace(/\s+/g, ' ').trim()
+const StickerForm = z.object({
+  name: z.string().transform(clean).pipe(z.string().min(1, 'Dê um nome para a figurinha.').max(40)),
+  tags: z
+    .string()
+    .max(300)
+    .default('')
+    .transform((t) => [...new Set(t.split(',').map((x) => clean(x).toLowerCase().slice(0, 24)).filter(Boolean))].slice(0, 8)),
+  kind: z.enum(['static', 'animated']),
+})
+const PackBody = z.object({
+  name: z.string().transform(clean).pipe(z.string().min(1, 'Dê um nome para o pacote.').max(64)),
+  author: z.string().default('').transform(clean).pipe(z.string().max(64)),
+  stickerIds: z.array(z.string().regex(/^[a-z0-9]{10}$/)).min(3, 'Um pacote precisa de pelo menos 3 figurinhas.').max(30),
+  coverId: z.string().regex(/^[a-z0-9]{10}$/).optional(),
+})
+const ID = /^[a-z0-9]{10}$/
+
+/** Largura e altura de um WebP (VP8, VP8L ou VP8X). */
+function webpSize(b: Uint8Array): { w: number; h: number } | null {
+  if (b.length < 30) return null
+  const tag = String.fromCharCode(...b.slice(12, 16))
+  if (tag === 'VP8X') return { w: 1 + (b[24] | (b[25] << 8) | (b[26] << 16)), h: 1 + (b[27] | (b[28] << 8) | (b[29] << 16)) }
+  if (tag === 'VP8L') {
+    const bits = b[21] | (b[22] << 8) | (b[23] << 16) | (b[24] << 24)
+    return { w: (bits & 0x3fff) + 1, h: ((bits >> 14) & 0x3fff) + 1 }
+  }
+  if (tag === 'VP8 ') return { w: (b[26] | (b[27] << 8)) & 0x3fff, h: (b[28] | (b[29] << 8)) & 0x3fff }
+  return null
+}
 
 function stickerOut(r: any) {
   return {
@@ -217,38 +331,52 @@ const isWebp = (b: Uint8Array) => b.length > 12 && String.fromCharCode(...b.slic
 const isOgg = (b: Uint8Array) => b.length > 4 && String.fromCharCode(...b.slice(0, 4)) === 'OggS'
 
 async function publishSticker(req: Request, env: Env) {
-  const { success } = await env.PUBLISH_LIMIT.limit({ key: `pub:${ip(req)}` })
-  if (!success) return err('Muitas publicações seguidas. Espere um minuto.', 429)
-  const form = await req.formData()
-  const name = String(form.get('name') ?? '').trim().slice(0, 40)
-  const tags = String(form.get('tags') ?? '')
-    .split(',')
-    .map((t) => t.trim().toLowerCase().slice(0, 24))
-    .filter(Boolean)
-    .slice(0, 8)
-  const kind = form.get('kind') === 'animated' ? 'animated' : 'static'
+  if (await limited(env, `pub:${ip(req)}`, 40)) return err('Muitas publicações seguidas. Espere um minuto.', 429)
+  const len = Number(req.headers.get('content-length') ?? 0)
+  if (!len || len > 1024 * 1024) return err('Arquivo grande demais.', 413)
+  let form: FormData
+  try {
+    form = await req.formData()
+  } catch {
+    return err('Pedido inválido.')
+  }
+  const parsed = StickerForm.safeParse({ name: form.get('name') ?? '', tags: form.get('tags') ?? '', kind: form.get('kind') })
+  if (!parsed.success) return err(parsed.error.issues[0]?.message?.startsWith('Dê') ? parsed.error.issues[0].message : 'Dados inválidos.')
+  const { name, tags, kind } = parsed.data
   const webpF = form.get('webp')
   const oggF = form.get('ogg')
-  if (!name) return err('Dê um nome para a figurinha.')
   if (!(webpF instanceof File)) return err('Falta a imagem.')
+  if (webpF.size > 520 * 1024) return err('A imagem passou do limite do WhatsApp.')
   const webp = new Uint8Array(await webpF.arrayBuffer())
   if (!isWebp(webp)) return err('A imagem precisa ser WebP.')
   if (webp.length > (kind === 'animated' ? 500 : 100) * 1024 + 4096) return err('A imagem passou do limite do WhatsApp.')
+  const dim = webpSize(webp)
+  if (!dim || dim.w !== 512 || dim.h !== 512) return err('A imagem precisa ter 512 × 512 px.')
   let ogg: Uint8Array | null = null
   if (oggF instanceof File && oggF.size > 0) {
+    if (oggF.size > 400 * 1024) return err('O som precisa ser OGG de até 10 s.')
     ogg = new Uint8Array(await oggF.arrayBuffer())
-    if (!isOgg(ogg) || ogg.length > 400 * 1024) return err('O som precisa ser OGG de até 10 s.')
+    if (!isOgg(ogg)) return err('O som precisa ser OGG de até 10 s.')
   }
   const id = rid()
   const token = rid(24)
   await env.FILES.put(`s/${id}.webp`, webp, { metadata: { type: 'image/webp' } })
   if (ogg) await env.FILES.put(`s/${id}.ogg`, ogg, { metadata: { type: 'audio/ogg' } })
+  const now = Date.now()
   await env.DB.prepare(
     'INSERT INTO stickers (id,name,tags,search,kind,has_sound,webp_size,created_at,token_hash) VALUES (?,?,?,?,?,?,?,?,?)',
   )
-    .bind(id, name, tags.join(','), norm(`${name} ${tags.join(' ')}`), kind, ogg ? 1 : 0, webp.length, Date.now(), await sha(token))
+    .bind(id, name, tags.join(','), norm(`${name} ${tags.join(' ')}`), kind, ogg ? 1 : 0, webp.length, now, await sha(token))
     .run()
-  return json({ id, token, sticker: stickerOut({ id, name, tags: tags.join(','), kind, has_sound: ogg ? 1 : 0, downloads: 0, created_at: Date.now() }) }, 201)
+  return json({ id, token, sticker: stickerOut({ id, name, tags: tags.join(','), kind, has_sound: ogg ? 1 : 0, downloads: 0, created_at: now }) }, 201)
+}
+
+/** Conta uma vez por pessoa por dia. */
+async function countDownload(req: Request, env: Env, table: 'stickers' | 'packs', id: string) {
+  const day = Math.floor(Date.now() / 86400000)
+  const r = await env.DB.prepare('INSERT OR IGNORE INTO downloads_seen (target, who, day) VALUES (?,?,?)').bind(`${table}:${id}`, await who(req, env), day).run()
+  if (r.meta.changes) await env.DB.prepare(`UPDATE ${table} SET downloads = downloads + 1 WHERE id = ?`).bind(id).run()
+  return json({ ok: true })
 }
 
 async function listStickers(env: Env, url: URL) {
@@ -258,7 +386,7 @@ async function listStickers(env: Env, url: URL) {
   const offset = Math.max(0, Number(url.searchParams.get('offset') ?? 0) | 0)
   const where = ['hidden = 0']
   const args: unknown[] = []
-  if (q) for (const w of q.split(/\s+/).slice(0, 4)) { where.push("search LIKE ? ESCAPE '\\'"); args.push(`%${w.replace(/[\\%_]/g, (c) => `\\${c}`)}%`) }
+  if (q) for (const w of q.split(/\s+/).filter(Boolean).slice(0, 4)) { where.push("search LIKE ? ESCAPE '\\'"); args.push(`%${w.replace(/[\\%_]/g, (c) => `\\${c}`)}%`) }
   if (url.searchParams.get('sound') === '1') where.push('has_sound = 1')
   const kind = url.searchParams.get('kind')
   if (kind === 'static' || kind === 'animated') { where.push('kind = ?'); args.push(kind) }
@@ -273,19 +401,23 @@ async function stickerRoute(req: Request, env: Env, id: string, action?: string)
   const row: any = await env.DB.prepare('SELECT * FROM stickers WHERE id = ?').bind(id).first()
   if (!row || (row.hidden && req.method === 'GET')) return err('Figurinha não encontrada.', 404)
   if (req.method === 'GET' && !action) return json({ sticker: stickerOut(row) }, 200, { 'cache-control': 'public, max-age=60' })
-  if (req.method === 'POST' && action === 'download') {
-    await env.DB.prepare('UPDATE stickers SET downloads = downloads + 1 WHERE id = ?').bind(id).run()
-    return json({ ok: true })
-  }
+  if (req.method === 'POST' && action === 'download') return countDownload(req, env, 'stickers', id)
   if (req.method === 'POST' && action === 'report') {
-    const { success } = await env.PUBLISH_LIMIT.limit({ key: `rep:${ip(req)}` })
-    if (!success) return err('Espere um minuto.', 429)
-    await env.DB.prepare('UPDATE stickers SET reports = reports + 1, hidden = CASE WHEN reports + 1 >= 3 THEN 1 ELSE hidden END WHERE id = ?').bind(id).run()
+    if (await limited(env, `rep:${ip(req)}`, 10)) return err('Espere um minuto.', 429)
+    // uma denúncia por pessoa; a figurinha sai do ar com 3 pessoas diferentes
+    const r = await env.DB.prepare('INSERT OR IGNORE INTO reports_seen (target, who, created_at) VALUES (?,?,?)').bind(`stickers:${id}`, await who(req, env), Date.now()).run()
+    if (r.meta.changes) {
+      await env.DB.prepare(
+        "UPDATE stickers SET reports = (SELECT COUNT(*) FROM reports_seen WHERE target = ?), hidden = CASE WHEN (SELECT COUNT(*) FROM reports_seen WHERE target = ?) >= 3 THEN 1 ELSE hidden END WHERE id = ?",
+      )
+        .bind(`stickers:${id}`, `stickers:${id}`, id)
+        .run()
+    }
     return json({ ok: true })
   }
   if (req.method === 'DELETE' && !action) {
-    const token = req.headers.get('x-edit-token') ?? ''
-    if ((await sha(token)) !== row.token_hash) return err('Código de edição inválido.', 403)
+    const token = (req.headers.get('x-edit-token') ?? '').slice(0, 64)
+    if (!token || !(await sameHash(await sha(token), row.token_hash))) return err('Código de edição inválido.', 403)
     await env.DB.prepare('DELETE FROM stickers WHERE id = ?').bind(id).run()
     await env.FILES.delete(`s/${id}.webp`)
     await env.FILES.delete(`s/${id}.ogg`)
@@ -295,21 +427,23 @@ async function stickerRoute(req: Request, env: Env, id: string, action?: string)
 }
 
 async function publishPack(req: Request, env: Env) {
-  const { success } = await env.PUBLISH_LIMIT.limit({ key: `pub:${ip(req)}` })
-  if (!success) return err('Muitas publicações seguidas. Espere um minuto.', 429)
-  const b: any = await req.json().catch(() => null)
-  if (!b) return err('Pedido inválido.')
-  const name = String(b.name ?? '').trim().slice(0, 64)
-  const author = String(b.author ?? '').trim().slice(0, 64)
-  const ids: string[] = Array.isArray(b.stickerIds) ? [...new Set(b.stickerIds.map(String))].slice(0, 30) as string[] : []
-  if (!name) return err('Dê um nome para o pacote.')
+  if (await limited(env, `pub:${ip(req)}`, 40)) return err('Muitas publicações seguidas. Espere um minuto.', 429)
+  if (Number(req.headers.get('content-length') ?? 0) > 16 * 1024) return err('Pedido grande demais.', 413)
+  const raw = await req.json().catch(() => null)
+  const parsed = PackBody.safeParse(raw)
+  if (!parsed.success) {
+    const m = parsed.error.issues[0]?.message ?? ''
+    return err(m.startsWith('Dê') || m.startsWith('Um pacote') ? m : 'Dados inválidos.')
+  }
+  const { name, author } = parsed.data
+  const ids = [...new Set(parsed.data.stickerIds)]
   if (ids.length < 3) return err('Um pacote precisa de pelo menos 3 figurinhas.')
   const ph = ids.map(() => '?').join(',')
   const rows = (await env.DB.prepare(`SELECT id, kind FROM stickers WHERE hidden = 0 AND id IN (${ph})`).bind(...ids).all()).results ?? []
   if (rows.length !== ids.length) return err('Alguma figurinha do pacote não existe mais.')
   const kinds = new Set(rows.map((r: any) => r.kind))
   if (kinds.size > 1) return err('O WhatsApp não aceita misturar figurinhas paradas e animadas no mesmo pacote.')
-  const cover = ids.includes(String(b.coverId)) ? String(b.coverId) : ids[0]
+  const cover = parsed.data.coverId && ids.includes(parsed.data.coverId) ? parsed.data.coverId : ids[0]
   const id = rid()
   const token = rid(24)
   await env.DB.prepare('INSERT INTO packs (id,name,author,kind,sticker_ids,cover_id,created_at,token_hash) VALUES (?,?,?,?,?,?,?,?)')
@@ -341,10 +475,7 @@ async function packRoute(req: Request, env: Env, id: string, action?: string) {
     const byId = new Map(rows.map((r: any) => [r.id, r]))
     return json({ pack: packOut(p, ids.map((i) => byId.get(i)).filter(Boolean)) }, 200, { 'cache-control': 'public, max-age=60' })
   }
-  if (req.method === 'POST' && action === 'download') {
-    await env.DB.prepare('UPDATE packs SET downloads = downloads + 1 WHERE id = ?').bind(id).run()
-    return json({ ok: true })
-  }
+  if (req.method === 'POST' && action === 'download') return countDownload(req, env, 'packs', id)
   return err('Método não permitido.', 405)
 }
 
@@ -355,35 +486,64 @@ async function listPacks(env: Env, url: URL) {
 }
 
 async function file(env: Env, key: string) {
-  if (!/^s\/[a-z0-9]+\.(webp|ogg)$/.test(key)) return err('não encontrado', 404)
+  const m = key.match(/^s\/([a-z0-9]{10})\.(webp|ogg)$/)
+  if (!m) return err('não encontrado', 404)
+  const row = await env.DB.prepare('SELECT hidden FROM stickers WHERE id = ?').bind(m[1]).first<{ hidden: number }>()
+  if (!row || row.hidden) return err('não encontrado', 404)
   const { value, metadata } = await env.FILES.getWithMetadata<{ type: string }>(key, { type: 'stream', cacheTtl: 86400 })
   if (!value) return err('não encontrado', 404)
-  return new Response(value, { headers: { 'content-type': metadata?.type ?? 'application/octet-stream', 'cache-control': 'public, max-age=31536000, immutable' } })
+  return new Response(value, { headers: { 'content-type': metadata?.type === 'audio/ogg' ? 'audio/ogg' : 'image/webp', 'cache-control': 'public, max-age=86400', 'content-disposition': 'inline' } })
 }
 
 /* ---------------- roteamento ---------------- */
+function crossSite(req: Request, url: URL) {
+  const origin = req.headers.get('origin')
+  if (origin && origin !== url.origin) return true
+  return req.headers.get('sec-fetch-site') === 'cross-site'
+}
+
+async function route(req: Request, env: Env, url: URL): Promise<Response> {
+  const p = url.pathname
+  const method = req.method
+  if (method === 'OPTIONS') return new Response(null, { status: 204, headers: { allow: 'GET, POST, DELETE' } })
+  if (method !== 'GET' && method !== 'HEAD' && crossSite(req, url)) return err('Origem não permitida.', 403)
+
+  if (p.startsWith('/api/media/') || p.startsWith('/api/sounds/')) {
+    if (await limited(env, `s:${ip(req)}`, 60)) return err('Muitas buscas seguidas. Espere alguns segundos.', 429)
+    // teto geral para proteger a cota das APIs de terceiros
+    if (await limited(env, 'global:search', 1500)) return err('Muita gente buscando agora. Tente de novo em instantes.', 429)
+  }
+  if (p === '/api/proxy' || p === '/api/img') {
+    const { success } = await env.PROXY_LIMIT.limit({ key: `p:${ip(req)}` })
+    if (!success) return err('Muitos pedidos seguidos. Espere alguns segundos.', 429)
+  }
+  if (p === '/api/memes' || p === '/api/media/memes') return await imgflip()
+  if (p === '/api/media/klipy') return await klipy(env, url)
+  if (p === '/api/sounds/myinstants') return await myinstants(url)
+  if (p === '/api/sounds/freesound') return await freesound(env, url)
+  if (p === '/api/proxy' || p === '/api/img') return await proxy(url)
+  if (p.startsWith('/api/f/')) return await file(env, p.slice(7))
+  if (p === '/api/stickers') return await (req.method === "POST" ? publishSticker(req, env) : listStickers(env, url))
+  let m = p.match(/^\/api\/stickers\/([a-z0-9]+)(?:\/(download|report))?$/)
+  if (m) return await stickerRoute(req, env, m[1], m[2])
+  if (p === '/api/packs') return await (req.method === "POST" ? publishPack(req, env) : listPacks(env, url))
+  m = p.match(/^\/api\/packs\/([a-z0-9]+)(?:\/(download))?$/)
+  if (m) return await packRoute(req, env, m[1], m[2])
+  return err('Rota não encontrada.', 404)
+}
+
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url)
-    const p = url.pathname
-    if (!p.startsWith('/api/')) return env.ASSETS.fetch(req)
+    if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(req)
     try {
-      if (p === '/api/memes' || p === '/api/media/memes') return await imgflip()
-      if (p === '/api/media/klipy') return await klipy(env, url)
-      if (p === '/api/sounds/myinstants') return await myinstants(url)
-      if (p === '/api/sounds/freesound') return await freesound(env, url)
-      if (p === '/api/proxy' || p === '/api/img') return await proxy(url)
-      if (p.startsWith('/api/f/')) return await file(env, p.slice(7))
-      if (p === '/api/stickers') return await (req.method === "POST" ? publishSticker(req, env) : listStickers(env, url))
-      let m = p.match(/^\/api\/stickers\/([a-z0-9]+)(?:\/(download|report))?$/)
-      if (m) return await stickerRoute(req, env, m[1], m[2])
-      if (p === '/api/packs') return await (req.method === "POST" ? publishPack(req, env) : listPacks(env, url))
-      m = p.match(/^\/api\/packs\/([a-z0-9]+)(?:\/(download))?$/)
-      if (m) return await packRoute(req, env, m[1], m[2])
-      return err('Rota não encontrada.', 404)
+      if (url.pathname.match(/^\/api\/stickers\/([^/]+)/) && !ID.test(url.pathname.split('/')[3] ?? '')) return secure(err('Figurinha não encontrada.', 404))
+      if (url.pathname.match(/^\/api\/packs\/([^/]+)/) && !ID.test(url.pathname.split('/')[3] ?? '')) return secure(err('Pacote não encontrado.', 404))
+      return secure(await route(req, env, url))
     } catch (e) {
-      console.error(e)
-      return err(`Erro no servidor: ${(e as Error).message}`, 500)
+      console.error('erro', url.pathname, e)
+      if (e instanceof HttpError) return secure(err(e.message, e.status))
+      return secure(err('Erro no servidor. Tente de novo.', 500))
     }
   },
 }
