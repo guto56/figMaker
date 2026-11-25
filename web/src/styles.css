@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Paleta "steel-orange" + tipo "familjen" (taste skill: start.mjs deal --page software) */
+:root {
+  --p-bg: #eeeeeb;
+  --p-surface: #e1e1dd;
+  --p-paper: #ffffff;
+  --p-ink: #1c1d1f;
+  --p-muted: #5c5e62;
+  --p-line: #d3d3ce;
+  --p-accent: #c2501b;
+  --p-accent-ink: #ffffff;
+  color-scheme: light;
+}
+
+html { background: var(--p-bg); color: var(--p-ink); -webkit-text-size-adjust: 100%; }
+body { font-family: "Familjen Grotesk", system-ui, sans-serif; font-feature-settings: "ss01"; }
+h1, h2, h3 { letter-spacing: -0.03em; font-weight: 500; text-wrap: balance; }
+p { text-wrap: pretty; }
+
+:focus-visible { outline: 2px solid var(--p-accent); outline-offset: 2px; border-radius: 6px; }
+
+@layer components {
+  .wrap { @apply mx-auto w-full max-w-6xl px-4 sm:px-6; }
+  .btn { @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-5 text-[15px] font-medium transition active:translate-y-px disabled:pointer-events-none disabled:opacity-40; }
+  .btn-main { @apply btn bg-ink text-paper hover:bg-accent; }
+  .btn-soft { @apply btn bg-paper text-ink ring-1 ring-line hover:ring-ink; }
+  .btn-ghost { @apply btn px-3 text-ink hover:bg-surface; }
+  .chip { @apply inline-flex min-h-9 items-center gap-1.5 rounded-full px-3.5 text-sm ring-1 ring-line transition hover:ring-ink; }
+  .chip[aria-pressed="true"], .chip[aria-selected="true"] { @apply bg-ink text-paper ring-ink; }
+  .panel { @apply rounded-xl2 bg-paper ring-1 ring-line; }
+  .label { @apply text-sm text-muted; }
+  .field { @apply min-h-11 w-full rounded-xl bg-paper px-3.5 ring-1 ring-line placeholder:text-muted/70 focus:outline-none focus:ring-2 focus:ring-ink; }
+  .mono { @apply font-mono text-[13px] tracking-tight; }
+}
+
+/* xadrez que mostra a transparência da figurinha */
+.checker {
+  background-color: #fff;
+  background-image: repeating-conic-gradient(#ececea 0% 25%, #ffffff 0% 50%);
+  background-size: 20px 20px;
+}
+
+input[type="range"] { accent-color: var(--p-ink); width: 100%; height: 28px; }
+
+/* entrada única do herói */
+@keyframes rise { from { opacity: 0; transform: translateY(14px) rotate(var(--r, 0deg)); } to { opacity: 1; transform: translateY(0) rotate(var(--r, 0deg)); } }
+.enter { animation: rise .7s cubic-bezier(.2,.7,.2,1) both; }
+.sticker-hover { transition: transform .25s cubic-bezier(.2,.7,.2,1); }
+.sticker-hover:hover { transform: translateY(-2px) scale(1.03) rotate(var(--r, 0deg)); }
+@keyframes wob { 0%,100% { transform: rotate(var(--r,0deg)) scale(1) } 30% { transform: rotate(calc(var(--r,0deg) - 4deg)) scale(1.06) } 60% { transform: rotate(calc(var(--r,0deg) + 3deg)) scale(1.02) } }
+.playing { animation: wob .5s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .enter, .playing { animation: none; }
+  .sticker-hover, .btn { transition: none; }
+}
