@@ -3,6 +3,13 @@
 ## Para readicionar
 - **"Partir de uma figurinha da galeria"** no editor (etapa Origem). Tirado em 25/11/2026 a pedido. O carregamento por `?de=<id>` continua funcionando (botões "Editar uma cópia" e "Pôr som nela"); falta só o painel com as figurinhas para escolher.
 
+## Entrega da figurinha (prioridade, aguardando vídeo de referência do dono)
+- **Download no formato certo:** hoje o .zip leva `figurinha.webp` + `som.ogg` separados. O correto:
+  - figurinha só de imagem → baixar só a imagem (.webp), sem .zip;
+  - figurinha com som → um arquivo ou forma de salvar que já junte imagem e som, para que ao levar ao WhatsApp vá tudo junto (investigar o formato que o WhatsApp aceita e o fluxo mostrado no vídeo que o dono vai enviar).
+- **Receber pelo WhatsApp com um clique** (se não houver jeito automático): a pessoa clica em "Receber no meu WhatsApp" e um número secundário do dono envia a figurinha para ela, com ou sem áudio.
+  - Pontos a definir: API oficial (WhatsApp Business Cloud API, número verificado, modelos de mensagem e janela de 24 h) ou cliente não oficial (Baileys, risco de banimento do número); como a pessoa informa o número dela (ou inicia a conversa via link `wa.me` para abrir a janela de 24 h); limites anti-abuso; se a API oficial entrega figurinha com som.
+
 ## Próximas funcionalidades
 - **Figurinha por IA:** descrever e o Zapfig desenha (Cloudflare Workers AI via binding `AI` no Worker, sem chave). Também foto → desenho/3D.
 - **Voz por texto:** digitar a frase e gerar o áudio da figurinha (TTS).
