@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { LIMITS, toWav } from '../lib/ffmpeg'
+import { SoundLibrary } from './SoundLibrary'
 
 export type AudioClip = {
   wav: Blob
@@ -33,6 +34,7 @@ export function AudioEditor({ clip, onChange, videoFile, videoStart = 0, setBusy
   const [recTime, setRecTime] = useState(0)
   const [err, setErr] = useState('')
   const [playing, setPlaying] = useState(false)
+  const [lib, setLib] = useState(!clip)
   const srcNode = useRef<AudioBufferSourceNode | null>(null)
 
   useEffect(() => {
@@ -159,6 +161,10 @@ export function AudioEditor({ clip, onChange, videoFile, videoStart = 0, setBusy
           Usar som do vídeo
         </button>
       </div>
+      <button className={`btn ${lib ? 'bg-ink text-paper' : 'bg-paper ring-1 ring-line hover:ring-ink'} justify-self-start`} onClick={() => setLib(!lib)} aria-expanded={lib}>
+        {lib ? 'Fechar biblioteca de sons' : 'Buscar som de meme ou efeito'}
+      </button>
+      {lib && <SoundLibrary onUse={(b, t) => { setLib(false); load(b, t) }} />}
       {err && <p className="text-sm text-accent" role="alert">{err}</p>}
 
       {clip ? (

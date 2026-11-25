@@ -6,6 +6,9 @@ import Home from './pages/Home'
 const Maker = lazy(() => import('./pages/Maker'))
 const Gallery = lazy(() => import('./pages/Gallery'))
 const HowTo = lazy(() => import('./pages/HowTo'))
+const StickerPage = lazy(() => import('./pages/StickerPage'))
+const PackPage = lazy(() => import('./pages/PackPage'))
+const PackBuilder = lazy(() => import('./pages/PackBuilder'))
 
 function NotFound() {
   return (
@@ -26,6 +29,9 @@ export default function App() {
             <Route path="criar" element={<Maker />} />
             <Route path="galeria" element={<Gallery />} />
             <Route path="como-usar" element={<HowTo />} />
+            <Route path="f/:id" element={<StickerPage />} />
+            <Route path="p/:id" element={<PackPage />} />
+            <Route path="pacote/novo" element={<PackBuilder />} />
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>

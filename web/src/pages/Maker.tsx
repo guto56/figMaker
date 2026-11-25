@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { AudioEditor, fmt, type AudioClip } from '../components/AudioEditor'
-import { MemeSearch } from '../components/MemeSearch'
+import { MemeSearch, type Picked } from '../components/MemeSearch'
+import { getSticker, publishSticker, toSticker, type RemoteSticker } from '../lib/api'
 import { SoundIcon, useSound, useUrl } from '../components/StickerTile'
 import { canvasToWebp, defaultLayout, loadImage, renderStatic, textOverlay, type Layout } from '../lib/compose'
 import { LIMITS, getFFmpeg, mediaDuration, toAnimatedWebp, toOpus, toWav } from '../lib/ffmpeg'
@@ -31,6 +32,8 @@ export default function Maker() {
   const [tags, setTags] = useState('')
   const [saved, setSaved] = useState('')
   const [showMemes, setShowMemes] = useState(false)
+  const [published, setPublished] = useState<RemoteSticker | null>(null)
+  const [publishing, setPublishing] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const overlayRef = useRef<HTMLCanvasElement>(null)
   const vidRef = useRef<HTMLVideoElement>(null)
@@ -48,6 +51,7 @@ export default function Maker() {
   useEffect(() => {
     setResult(null)
     setSaved('')
+    setPublished(null)
   }, [img, layout, video?.start, video?.length, video?.fit, video?.speed, audio])
 
   // fontes podem chegar depois do primeiro desenho
@@ -72,15 +76,15 @@ export default function Maker() {
     }
   }, [name])
 
-  const setVideoFile = async (file: File) => {
+  const setVideoFile = async (file: File, label?: string) => {
     setErr('')
     const duration = await mediaDuration(file)
-    setVideo({ file, url: URL.createObjectURL(file), duration, start: 0, length: Math.min(duration, LIMITS.maxSeconds), fit: 'crop', speed: 1 })
+    setVideo({ file, url: URL.createObjectURL(file), duration, start: 0, length: Math.min(duration, LIMITS.maxSeconds), fit: file.type.includes('gif') ? 'fit' : 'crop', speed: 1 })
     setOriginal(null)
     setCutout(null)
     setMode('video')
     setLayout(defaultLayout())
-    if (!name) setName(file.name.replace(/\.[a-z0-9]+$/i, '').slice(0, 40))
+    if (!name) setName((label ?? file.name.replace(/\.[a-z0-9]+$/i, '')).slice(0, 40))
     setTab('editar')
     if (!file.type.includes('gif')) {
       // usa o som do vídeo por padrão, se ele tiver
@@ -101,12 +105,20 @@ export default function Maker() {
     setErr('Use uma imagem (PNG, JPG, WebP), um GIF ou um vídeo.')
   }
 
+  const onPicked = (p: Picked) => {
+    setShowMemes(false)
+    if (p.kind === 'image' && !p.blob.type.includes('gif')) return setImage(p.blob, p.name)
+    const type = p.blob.type && p.blob.type !== 'application/octet-stream' ? p.blob.type : 'video/mp4'
+    const ext = type.includes('gif') ? 'gif' : type.includes('webm') ? 'webm' : type.includes('webp') ? 'webp' : 'mp4'
+    setVideoFile(new File([p.blob], `${slug(p.name)}.${ext}`, { type }), p.name)
+  }
+
   // carregar figurinha existente (?de=id)
   useEffect(() => {
     const id = params.get('de')
     if (!id) return
     ;(async () => {
-      const s: Sticker | undefined = SEED.find((x) => x.id === id) ?? (await getMine(id))
+      const s: Sticker | undefined = SEED.find((x) => x.id === id) ?? (id.startsWith('r-') ? toSticker(await getSticker(id.slice(2))) : await getMine(id))
       if (!s) return
       await setImage(await asBlob(s.webp), s.name)
       setName(s.name)
@@ -347,14 +359,14 @@ export default function Maker() {
                 <div className="panel p-5">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <h2 className="text-xl">Meme real</h2>
-                      <p className="text-muted">Escolha um modelo conhecido e escreva o seu texto.</p>
+                      <h2 className="text-xl">Memes, GIFs e clips com som</h2>
+                      <p className="text-muted">Busque um meme real e use direto na figurinha.</p>
                     </div>
                     <button className="btn-soft" onClick={() => setShowMemes(!showMemes)} aria-expanded={showMemes}>
                       {showMemes ? 'Fechar busca' : 'Buscar meme'}
                     </button>
                   </div>
-                  {showMemes && <div className="mt-4"><MemeSearch onPick={(b, n) => setImage(b, n)} /></div>}
+                  {showMemes && <div className="mt-4"><MemeSearch onPick={onPicked} /></div>}
                 </div>
                 <div className="panel p-5">
                   <h2 className="text-xl">Partir de uma figurinha da galeria</h2>
@@ -507,7 +519,28 @@ export default function Maker() {
                           await saveSticker(s)
                           setSaved(s.id)
                         }} disabled={!!saved}>{saved ? 'Salva em Minhas figurinhas' : 'Salvar em Minhas figurinhas'}</button>
+                        <button className="btn-soft" disabled={publishing || !!published} onClick={async () => {
+                          const s = sticker()
+                          if (!s || !result) return
+                          setPublishing(true)
+                          setErr('')
+                          try {
+                            const r = await publishSticker({ name: s.name, tags: s.tags, kind: s.kind, webp: result.webp, ogg: result.ogg })
+                            setPublished(r)
+                            await saveSticker({ ...s, remoteId: r.id })
+                            setSaved(s.id)
+                          } catch (e) {
+                            setErr((e as Error).message)
+                          } finally {
+                            setPublishing(false)
+                          }
+                        }}>{published ? 'Publicada na galeria' : publishing ? 'Publicando…' : 'Publicar na galeria'}</button>
                       </div>
+                      {published && (
+                        <p className="text-sm text-muted" role="status">
+                          Publicada. Link para compartilhar: <Link className="break-all text-ink underline underline-offset-4" to={`/f/${published.id}`}>{location.host}/f/{published.id}</Link>
+                        </p>
+                      )}
                       {saved && <p className="text-sm text-muted" role="status">Guardada neste navegador. <Link className="text-ink underline underline-offset-4" to="/galeria?aba=minhas">Ver minhas figurinhas</Link></p>}
                       <p className="text-sm text-muted">Depois de baixar, veja <Link className="text-ink underline underline-offset-4" to="/como-usar">como pôr no WhatsApp</Link>.</p>
                     </section>

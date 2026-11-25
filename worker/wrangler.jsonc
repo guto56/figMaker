@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "zapfig",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "account_id": "762fe93850d238b22cac17ead40753c7",
+  "workers_dev": true,
+  "assets": {
+    "directory": "../web/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [{ "binding": "DB", "database_name": "zapfig", "database_id": "002935f0-caaf-4ebd-8584-abfaac9f0e05", "migrations_dir": "migrations" }],
+  "kv_namespaces": [{ "binding": "FILES", "id": "a9bb3613faef448a86ed7c7e60f47acd" }],
+  "ai": { "binding": "AI" },
+  "ratelimits": [{ "name": "PUBLISH_LIMIT", "namespace_id": "1001", "simple": { "limit": 20, "period": 60 } }],
+  "observability": { "enabled": true }
+}

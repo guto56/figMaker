@@ -10,6 +10,10 @@ export type Sticker = {
   tags: string[]
   createdAt: number
   seed?: boolean
+  /** publicada na galeria da comunidade */
+  remoteId?: string
+  remote?: boolean
+  downloads?: number
 }
 
 const db = createStore('zapfig', 'stickers')

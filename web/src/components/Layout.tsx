@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 
 const links = [
   { to: '/galeria', label: 'Galeria' },
+  { to: '/pacote/novo', label: 'Montar pacote' },
   { to: '/como-usar', label: 'Como usar' },
 ]
 
@@ -72,7 +73,7 @@ export function Layout() {
           </nav>
         </div>
         <div className="wrap pb-8 text-sm text-muted">
-          Zapfig versão 1. Figurinhas de exemplo ilustradas com IA (Cloudflare Workers AI). Modelos de meme via Imgflip. Não é afiliado ao WhatsApp nem à Meta.
+          Zapfig versão 1. Figurinhas de exemplo ilustradas com IA (Cloudflare Workers AI). Memes via Imgflip e KLIPY. Sons via MyInstants e Freesound (CC). Não é afiliado ao WhatsApp nem à Meta.
         </div>
       </footer>
     </div>
