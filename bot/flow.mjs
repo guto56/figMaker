@@ -402,11 +402,14 @@ export function createFlow({ sendSticker, log = console, fetchMedia = download }
     const left = remaining(user)
     const quota = left === Infinity ? 'Você não tem limite.' : `Hoje você ainda pode fazer *${left} de ${DAILY_LIMIT}* aqui.`
     let text
-    if (has(t, ['som', 'audio', 'barulho'])) {
+    const wantsToMake = has(t, ['fazer', 'faz', 'criar', 'cria', 'montar', 'monta', 'gerar', 'transforma', 'como', 'ajuda', 'menu', 'comeca'])
+    if (wantsToMake) {
+      text = null // cai no menu de boas-vindas
+    } else if (has(t, ['som', 'audio', 'barulho'])) {
       text = `🔊 Todas as figurinhas *com som* estão aqui:\n${SITE}/galeria?filtro=som\n\nToque em uma e depois em *Receber no WhatsApp* que eu mando para você.\n\nPara fazer a sua com som, me mande uma foto, vídeo ou GIF.`
     } else if (has(t, ['animada', 'gif', 'mexe'])) {
       text = `🎞️ Figurinhas animadas:\n${SITE}/galeria?filtro=animada\n\nOu me mande um vídeo ou GIF que eu transformo em figurinha animada.`
-    } else if (has(t, ['lista', 'galeria', 'todas', 'catalogo', 'meme', 'figurinha', 'pacote'])) {
+    } else if (has(t, ['lista', 'galeria', 'todas', 'catalogo', 'pacote'])) {
       text = `📚 Galeria do Zapfig:\n${SITE}/galeria\n\nSó com som: ${SITE}/galeria?filtro=som\nPacotes: ${SITE}/galeria?aba=pacotes`
     } else if (has(t, ['limite', 'quantas', 'restam', 'sobrou'])) {
       text = `${quota}\nNo site é à vontade: ${SITE}/criar`
@@ -414,7 +417,8 @@ export function createFlow({ sendSticker, log = console, fetchMedia = download }
       text = `🌐 ${SITE}\n\nCriar: ${SITE}/criar\nGaleria: ${SITE}/galeria`
     } else if (has(t, ['obrigad', 'valeu', 'vlw', 'top', 'show', 'kkk', 'haha'])) {
       text = 'Tamo junto! 😄 Quando quiser outra, é só mandar uma foto, vídeo ou GIF.'
-    } else {
+    }
+    if (!text) {
       const first = now - (helpSentAt.get(user) || 0) > HELP_EVERY_MS
       helpSentAt.set(user, now)
       const intro = c.stickerMessage ? 'Figurinha boa! 😄 ' : first ? 'Oi! Eu sou o robô do Zapfig 🤖\n\n' : ''
