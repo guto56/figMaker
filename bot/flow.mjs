@@ -40,6 +40,9 @@ const OPT = {
   thisOne: '✅ É esse, gerar',
   otherSound: '🔁 Escolher outro som',
   searchAgain: '🔎 Buscar de novo',
+  useNew: '🆕 Fazer com a nova',
+  useNewSound: '🔊 Usar só o som dela',
+  keepOld: '↩️ Continuar a anterior',
 }
 
 const sessions = new Map()
@@ -80,6 +83,13 @@ function audioOf(m) {
   const d = c.documentMessage
   if (d?.mimetype?.startsWith('audio/')) return { ext: d.mimetype.split('/')[1].split(';')[0], size: Number(d.fileLength || 0) }
   return null
+}
+
+/** Vídeo (com som) mandado quando o robô pediu áudio: usa a trilha de áudio dele. */
+function videoAudioOf(m) {
+  const md = mediaOf(m)
+  if (!md || md.type !== 'video') return null
+  return { ext: md.ext, size: md.size, video: true }
 }
 
 const textOf = (m) => {
@@ -258,19 +268,46 @@ export function createFlow({ sendSticker, log = console, fetchMedia = download }
         if (a === OPT.noSound) return generate(sock, s)
         if (a === OPT.myAudio) {
           s.stage = 'audio-input'
-          return say(sock, jid, 'Pode mandar o áudio: grave segurando o 🎤 ou envie um arquivo de áudio. Uso até 10 segundos.')
+          return say(sock, jid, 'Pode mandar o áudio: grave segurando o 🎤, envie um arquivo de áudio ou mande um *vídeo* que eu uso o som dele. Uso até 10 segundos.')
         }
         return askMeme(sock, s)
 
       case 'audio-input': {
-        const au = audioOf(m)
+        const au = audioOf(m) || videoAudioOf(m)
         if (!au) return
         try {
           const ogg = await toStickerAudio(await fetchMedia(sock, m), au.ext, 10)
           return previewAndConfirm(sock, s, ogg, 'seu áudio', 'mine')
         } catch {
-          return say(sock, jid, 'Não consegui usar esse áudio. Tente gravar de novo.')
+          return say(sock, jid, au.video ? 'Esse vídeo não tem som (ou não consegui tirar o som dele). Mande um áudio ou outro vídeo.' : 'Não consegui usar esse áudio. Tente gravar de novo.')
         }
+      }
+
+      case 'media-switch': {
+        if (!a) return
+        const p = s.pending
+        s.pending = null
+        if (a === OPT.useNew) {
+          end(s)
+          return startWithMedia(sock, p.m, s.user, jid, p.media)
+        }
+        Object.assign(s, s.before)
+        if (a === OPT.useNewSound) {
+          let ogg
+          try {
+            ogg = await toStickerAudio(await fetchMedia(sock, p.m), p.media.ext, 10)
+          } catch {
+            await say(sock, jid, 'Esse vídeo não tem som (ou não consegui tirar o som dele). Continuando com a anterior: responda a pergunta de cima.')
+            return
+          }
+          // já estava na parte do som: mostra a prévia agora; senão guarda e usa quando chegar lá
+          if (['sound-choice', 'audio-input', 'audio-confirm', 'meme-pick', 'search-input', 'search-pick', 'meme-confirm'].includes(s.stage)) {
+            return previewAndConfirm(sock, s, ogg, 'som do vídeo', 'mine')
+          }
+          s.audio = ogg
+          return say(sock, jid, 'Guardei o som desse vídeo 🔊 Ele vai na figurinha. Agora responda a pergunta de cima.')
+        }
+        return say(sock, jid, 'Beleza, continuando com a anterior. Responda a pergunta de cima.')
       }
 
       case 'audio-confirm':
@@ -341,6 +378,7 @@ export function createFlow({ sendSticker, log = console, fetchMedia = download }
   }
 
   async function askSound(sock, s) {
+    if (s.audio) return previewAndConfirm(sock, s, s.audio, 'som do vídeo', 'mine')
     s.stage = 'sound-choice'
     await ask(sock, s, 'Quer com som?', [OPT.noSound, OPT.myAudio, OPT.memeSound])
   }
@@ -399,6 +437,26 @@ export function createFlow({ sendSticker, log = console, fetchMedia = download }
     if (c.reactionMessage || c.protocolMessage || c.pollUpdateMessage) return true // ignora reações e avisos do sistema
     const media = mediaOf(m)
     if (media) {
+      if (s && ['generating', 'cutting', 'downloading'].includes(s.stage)) {
+        await say(sock, jid, 'Espera eu terminar a figurinha anterior e manda essa de novo. 😉', m)
+        return true
+      }
+      // pedi áudio e veio vídeo: usa o som do vídeo
+      if (s && s.stage === 'audio-input' && media.type === 'video') {
+        await safeStep(sock, s, m, null)
+        return true
+      }
+      // mídia nova no meio de uma conversa: pergunta o que fazer
+      if (s && s.stage !== 'media-switch') {
+        touch(s)
+        s.before = { stage: s.stage, options: s.options, pollId: s.pollId }
+        s.pending = { m, media }
+        s.stage = 'media-switch'
+        const opts = media.type === 'video' ? [OPT.useNew, OPT.useNewSound, OPT.keepOld] : [OPT.useNew, OPT.keepOld]
+        await ask(sock, s, 'Você mandou outra mídia no meio da figurinha. O que eu faço?', opts)
+        return true
+      }
+      if (s) end(s)
       await startWithMedia(sock, m, user, jid, media)
       return true
     }
