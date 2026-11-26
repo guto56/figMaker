@@ -87,3 +87,19 @@ export async function toStickerAudio(data, ext = 'bin', maxSeconds = 10) {
     return out
   })
 }
+
+/**
+ * Mesma faixa de áudio, arquivo diferente: troca só a etiqueta interna do OGG.
+ * O WhatsApp identifica o arquivo pelo conteúdo; mandar duas vezes o mesmo arquivo
+ * (prévia e depois a figurinha, ou o mesmo som escolhido de novo) faz o celular
+ * mostrar "áudio não está mais disponível".
+ */
+export async function uniqueOgg(data) {
+  return withTmp(async (dir) => {
+    const input = join(dir, 'in.ogg')
+    const output = join(dir, 'out.ogg')
+    await writeFile(input, data)
+    await ffmpeg(['-i', input, '-c', 'copy', '-metadata', `comment=zapfig-${Date.now()}-${Math.random().toString(36).slice(2)}`, output])
+    return readFile(output)
+  })
+}

@@ -16,6 +16,7 @@ import { rmSync } from 'node:fs'
 import pino from 'pino'
 import qrcode from 'qrcode-terminal'
 import { createFlow } from './flow.mjs'
+import { uniqueOgg } from './maker.mjs'
 import { inspectIncomingStickers } from './inspect.mjs'
 import { attachAudio, oggSeconds, patchStickerEncoder } from './sound-sticker.mjs'
 
@@ -76,6 +77,8 @@ async function sendSticker(sock, jid, job, quoted) {
   const media = await prepareWAMessageMedia({ sticker: job.webp, isAnimated: job.kind === 'animated' }, upload)
   media.stickerMessage.isAnimated = job.kind === 'animated'
   if (job.ogg) {
+    // arquivo único a cada envio (a prévia e reenvios da mesma figurinha usam o mesmo som)
+    job = { ...job, ogg: await uniqueOgg(job.ogg).catch(() => job.ogg) }
     const { audioMessage } = await prepareWAMessageMedia({ audio: job.ogg, mimetype: 'audio/ogg; codecs=opus' }, upload)
     // igual ao áudio de uma figurinha com som feita no app: sem ptt e sem waveform
     audioMessage.mimetype = 'audio/ogg; codecs=opus'

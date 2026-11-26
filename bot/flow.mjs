@@ -4,7 +4,7 @@
 import { downloadMediaMessage, jidNormalizedUser } from '@whiskeysockets/baileys'
 import { DAILY_LIMIT, consume, remaining } from './limits.mjs'
 import { cutoutAvailable, removeBackground } from './cutout.mjs'
-import { makeSticker, toStickerAudio } from './maker.mjs'
+import { makeSticker, toStickerAudio, uniqueOgg } from './maker.mjs'
 import { readVote, sendPoll } from './polls.mjs'
 
 const SITE = (process.env.ZAPFIG_API || 'https://zapfig.site').replace(/\/$/, '')
@@ -149,7 +149,7 @@ export function createFlow({ sendSticker, log = console, fetchMedia = download }
   async function previewAndConfirm(sock, s, ogg, title, kind) {
     s.audio = ogg
     log.log?.(`prévia de som (${kind}, ${ogg.length} bytes)`)
-    await sock.sendMessage(s.jid, { audio: ogg, mimetype: 'audio/ogg; codecs=opus', ptt: true })
+    await sock.sendMessage(s.jid, { audio: await uniqueOgg(ogg).catch(() => ogg), mimetype: 'audio/ogg; codecs=opus', ptt: true })
     if (kind === 'mine') {
       s.stage = 'audio-confirm'
       await ask(sock, s, 'Ouviu? Vai ficar assim na figurinha (até 10 s).', [OPT.ok, OPT.otherAudio, OPT.noSound])
