@@ -7,22 +7,22 @@ const steps = [
   {
     t: 'Faça ou escolha a figurinha',
     d: 'Em Criar, use uma foto, um GIF, um vídeo ou um meme da busca. Ou abra qualquer figurinha da Galeria.',
-    img: '/seed/perai.webp',
+    img: '/seed/pensa-comigo.webp',
   },
   {
     t: 'Toque no botão verde',
     d: 'O botão "Receber no meu WhatsApp" abre o seu WhatsApp com uma mensagem já escrita, tipo ZAPFIG ABC123.',
-    img: '/seed/confia.webp',
+    img: '/seed/kirby-ok.webp',
   },
   {
     t: 'Envie a mensagem',
     d: 'É só tocar em enviar. Não precisa escrever nada. A figurinha chega em segundos, já com o som.',
-    img: '/seed/manda-o-pix.webp',
+    img: '/seed/e-o-pix.webp',
   },
   {
     t: 'Guarde nas suas figurinhas',
     d: 'Toque e segure a figurinha que chegou e escolha Favoritar (ou "Adicionar às figurinhas"). Pronto: ela aparece no seu painel.',
-    img: '/seed/te-amo.webp',
+    img: '/seed/gato-feliz.webp',
   },
 ]
 

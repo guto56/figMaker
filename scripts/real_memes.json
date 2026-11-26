@@ -1,0 +1,359 @@
+[
+ {
+  "id": "drake",
+  "name": "Drake: não e sim",
+  "tags": [
+   "drake",
+   "não",
+   "sim",
+   "preferência"
+  ],
+  "src": "imgflip",
+  "q": "Drake Hotline Bling",
+  "crop": [
+   0,
+   0,
+   0.5,
+   1
+  ]
+ },
+ {
+  "id": "namorado-distraido",
+  "name": "Namorado distraído",
+  "tags": [
+   "namorado distraído",
+   "olhando",
+   "ciúme"
+  ],
+  "src": "imgflip",
+  "q": "Distracted Boyfriend"
+ },
+ {
+  "id": "mulher-gato",
+  "name": "Mulher gritando com o gato",
+  "tags": [
+   "gato",
+   "briga",
+   "gritando"
+  ],
+  "src": "imgflip",
+  "q": "Woman Yelling At Cat"
+ },
+ {
+  "id": "menina-incendio",
+  "name": "Menina do incêndio",
+  "tags": [
+   "incêndio",
+   "caos",
+   "sorriso"
+  ],
+  "src": "imgflip",
+  "q": "Disaster Girl"
+ },
+ {
+  "id": "harold",
+  "name": "Harold escondendo a dor",
+  "tags": [
+   "harold",
+   "dor",
+   "sorriso falso",
+   "triste"
+  ],
+  "src": "imgflip",
+  "q": "Hide the Pain Harold",
+  "sound": "violino triste"
+ },
+ {
+  "id": "pensa-comigo",
+  "name": "Pensa comigo",
+  "tags": [
+   "pensa",
+   "esperto",
+   "roll safe"
+  ],
+  "src": "imgflip",
+  "q": "Roll Safe Think About It",
+  "sound": "Mentalista"
+ },
+ {
+  "id": "macaco-disfarcando",
+  "name": "Macaco disfarçando",
+  "tags": [
+   "macaco",
+   "disfarçando",
+   "olhando de lado"
+  ],
+  "src": "imgflip",
+  "q": "Monkey Puppet",
+  "sound": "vine boom",
+  "crop": [
+   0,
+   0.3,
+   1,
+   1
+  ]
+ },
+ {
+  "id": "ta-tudo-bem",
+  "name": "Tá tudo bem",
+  "tags": [
+   "tudo bem",
+   "caos",
+   "fogo",
+   "this is fine"
+  ],
+  "src": "imgflip",
+  "q": "This Is Fine"
+ },
+ {
+  "id": "bob-esponja-zoando",
+  "name": "Bob Esponja zoando",
+  "tags": [
+   "bob esponja",
+   "zoando",
+   "deboche"
+  ],
+  "src": "imgflip",
+  "q": "Mocking Spongebob"
+ },
+ {
+  "id": "pablo-esperando",
+  "name": "Pablo Escobar esperando",
+  "tags": [
+   "esperando",
+   "sozinho",
+   "tédio"
+  ],
+  "src": "imgflip",
+  "q": "Sad Pablo Escobar"
+ },
+ {
+  "id": "esqueleto-esperando",
+  "name": "Esqueleto esperando",
+  "tags": [
+   "esperando",
+   "demora",
+   "vácuo"
+  ],
+  "src": "imgflip",
+  "q": "Waiting Skeleton",
+  "sound": "grilo"
+ },
+ {
+  "id": "e-o-pix",
+  "name": "E o pix?",
+  "tags": [
+   "pix",
+   "dinheiro",
+   "cobrando",
+   "megamind"
+  ],
+  "src": "imgflip",
+  "q": "Megamind peeking",
+  "sound": "E o pix? Nada ainda?"
+ },
+ {
+  "id": "doge-cheems",
+  "name": "Doge forte e Cheems",
+  "tags": [
+   "doge",
+   "cheems",
+   "antes e depois"
+  ],
+  "src": "imgflip",
+  "q": "Buff Doge vs. Cheems"
+ },
+ {
+  "id": "caco-do-mal",
+  "name": "Caco do mal",
+  "tags": [
+   "caco",
+   "tentação",
+   "kermit"
+  ],
+  "src": "imgflip",
+  "q": "Evil Kermit"
+ },
+ {
+  "id": "bad-luck-brian",
+  "name": "Bad Luck Brian",
+  "tags": [
+   "azar",
+   "brian",
+   "deu ruim"
+  ],
+  "src": "imgflip",
+  "q": "Bad Luck Brian"
+ },
+ {
+  "id": "bruh",
+  "name": "Bruh",
+  "tags": [
+   "bruh",
+   "decepção",
+   "sério"
+  ],
+  "src": "clips",
+  "q": "bruh",
+  "pick": 1
+ },
+ {
+  "id": "velho-gritando",
+  "name": "Velho gritando",
+  "tags": [
+   "grito",
+   "desespero",
+   "velho"
+  ],
+  "src": "clips",
+  "q": "old man screaming"
+ },
+ {
+  "id": "interessante",
+  "name": "Interessante",
+  "tags": [
+   "interessante",
+   "hmm",
+   "curioso"
+  ],
+  "src": "clips",
+  "q": "interesting meme"
+ },
+ {
+  "id": "wow",
+  "name": "Wow",
+  "tags": [
+   "wow",
+   "uau",
+   "surpresa"
+  ],
+  "src": "clips",
+  "q": "wow owen wilson"
+ },
+ {
+  "id": "oh-no",
+  "name": "Oh no",
+  "tags": [
+   "oh no",
+   "deu ruim",
+   "socorro"
+  ],
+  "src": "clips",
+  "q": "oh no no no"
+ },
+ {
+  "id": "bebe-rindo",
+  "name": "Bebê rindo",
+  "tags": [
+   "risada",
+   "kkkk",
+   "bebê"
+  ],
+  "src": "stickers",
+  "q": "chinese baby",
+  "sound": "A risada do kiko"
+ },
+ {
+  "id": "gato-bobo",
+  "name": "Gato bobo",
+  "tags": [
+   "gato",
+   "bobo",
+   "silly cat"
+  ],
+  "src": "stickers",
+  "q": "silly cat",
+  "sound": "Pegue o gato"
+ },
+ {
+  "id": "cavalo",
+  "name": "Cavalo chocado",
+  "tags": [
+   "cavalo",
+   "reação",
+   "choque"
+  ],
+  "src": "stickers",
+  "q": "horse reaction",
+  "sound": "FAAAH"
+ },
+ {
+  "id": "cachorro-bom-dia",
+  "name": "Bom dia a todos",
+  "tags": [
+   "bom dia",
+   "cachorro",
+   "grupo"
+  ],
+  "src": "stickers",
+  "q": "funny dog",
+  "sound": "Bom dia a todos e todes"
+ },
+ {
+  "id": "sorriso-de-canto",
+  "name": "Sorriso de canto",
+  "tags": [
+   "sorriso",
+   "malícia",
+   "smirk"
+  ],
+  "src": "stickers",
+  "q": "smirk"
+ },
+ {
+  "id": "gato-feliz",
+  "name": "Gato feliz",
+  "tags": [
+   "gato",
+   "feliz",
+   "alegria"
+  ],
+  "src": "stickers",
+  "q": "happy cat"
+ },
+ {
+  "id": "kirby-ok",
+  "name": "Kirby: ok",
+  "tags": [
+   "ok",
+   "kirby",
+   "beleza"
+  ],
+  "src": "stickers",
+  "q": "kirby ok"
+ },
+ {
+  "id": "sacabambaspis",
+  "name": "Sacabambaspis",
+  "tags": [
+   "peixe",
+   "sacabambaspis",
+   "reação"
+  ],
+  "src": "stickers",
+  "q": "sacabambaspis"
+ },
+ {
+  "id": "envergonhado",
+  "name": "Envergonhado",
+  "tags": [
+   "vergonha",
+   "tímido",
+   "sem graça"
+  ],
+  "src": "stickers",
+  "q": "embarrassed"
+ },
+ {
+  "id": "sorriso-sem-graca",
+  "name": "Sorriso sem graça",
+  "tags": [
+   "sem graça",
+   "constrangido",
+   "awkward"
+  ],
+  "src": "stickers",
+  "q": "awkward smile",
+  "pick": 1
+ }
+]

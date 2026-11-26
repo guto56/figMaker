@@ -156,7 +156,7 @@ export default function Gallery() {
           )}
           {!loading && list.length === 0 && (
             <div className="panel mt-8 flex flex-col items-center gap-4 px-6 py-16 text-center">
-              <img src="/seed/perai.webp" alt="" className="h-28 w-28" />
+              <img src="/seed/sacabambaspis.webp" alt="" className="h-28 w-28" />
               <p className="max-w-sm text-muted">
                 {tab === 'minhas' && mine.length === 0
                   ? 'Você ainda não salvou nenhuma figurinha. As que você criar aparecem aqui.'
