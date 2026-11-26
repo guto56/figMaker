@@ -18,6 +18,7 @@
     { "name": "PROXY_LIMIT", "namespace_id": "1003", "simple": { "limit": 600, "period": 60 } }
   ],
   "preview_urls": false,
+  "vars": { "WA_NUMBER": "5565992463819" },
   "durable_objects": { "bindings": [{ "name": "LIMITER", "class_name": "Limiter" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Limiter"] }],
   "observability": { "enabled": true }
