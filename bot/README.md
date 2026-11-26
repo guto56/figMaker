@@ -45,3 +45,15 @@ Para o robô funcionar, o Mac precisa estar ligado e sem dormir. Em **Ajustes do
 - `index.mjs`: conexão, leitura do código e envio.
 - `sound-sticker.mjs`: coloca o som dentro da figurinha (campo 26 da StickerMessage, que o Baileys ainda não conhece).
 - `auth/`: a sessão do WhatsApp. **Não compartilhe e não envie ao GitHub** (já está no `.gitignore`).
+
+## Instalar num servidor Linux (Oracle Cloud)
+
+Numa máquina Ubuntu ou Oracle Linux, rode um comando só (troque a senha):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/guto56/figMaker/claude/keen-cray-naswc6/bot/instalar-servidor-linux.sh | BOT_TOKEN=SENHA_DO_ROBO PAIR_NUMBER=5565992463819 bash
+```
+
+O script instala o Node, baixa o robô e o deixa como serviço. No fim, mostra um código de 8 letras: no celular do número do robô, vá em **Aparelhos conectados > Conectar um aparelho > Conectar com número de telefone** e digite esse código.
+
+Se o código não funcionar, troque `PAIR_NUMBER` pelo número sem o 9 depois do DDD (`556592463819`), porque alguns números antigos ficam registrados assim no WhatsApp.
