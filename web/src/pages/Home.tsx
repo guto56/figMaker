@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { BotCta } from '../components/BotCta'
 import { SoundIcon, StickerTile, useSound } from '../components/StickerTile'
 import { StickerDialog } from '../components/StickerDialog'
 import { SEED } from '../lib/seed'
@@ -110,6 +111,10 @@ export default function Home() {
           </ol>
         </div>
       </section>
+
+      <div className="wrap pt-20">
+        <BotCta />
+      </div>
 
       <section className="wrap py-20" aria-labelledby="galeria">
         <div className="flex flex-wrap items-end justify-between gap-4">

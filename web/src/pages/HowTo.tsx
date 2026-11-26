@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { BotCta } from '../components/BotCta'
 import { WhatsAppIcon } from '../components/ReceiveWhatsApp'
 import { sendConfig } from '../lib/api'
 
@@ -29,6 +30,7 @@ const steps = [
 const faqs: Array<[string, string]> = [
   ['A figurinha com som não toca. E agora?', 'Toque uma vez na figurinha: o som toca ao tocar. Se aparece o ícone de alto-falante riscado, ela está no mudo até você tocar. Se não toca de jeito nenhum, atualize o WhatsApp na loja de apps: a figurinha com som está chegando aos poucos para todo mundo.'],
   ['Preciso criar conta ou pagar?', 'Não. Criar, receber no WhatsApp e baixar é grátis e sem cadastro.'],
+  ['Dá para fazer a figurinha só pelo WhatsApp?', 'Dá: mande uma foto, vídeo ou GIF para o robô do Zapfig. Ele pergunta se você quer texto e som (seu áudio ou um som de meme) e manda a figurinha pronta. São 3 por dia; pelo site é à vontade.'],
   ['De quem é o número que manda a figurinha?', 'É o robô do Zapfig. Ele só responde quando você manda a mensagem com o código e não manda propaganda. Pode apagar a conversa depois, se quiser.'],
   ['Apareceu "código expirou". O que faço?', 'Cada código vale 30 minutos e serve uma vez. Volte ao site e toque de novo em "Receber no meu WhatsApp".'],
   ['O WhatsApp não abriu quando toquei no botão.', 'Aparece um botão "Abrir o WhatsApp" logo abaixo: toque nele. No computador, ele abre o WhatsApp Web ou o app do WhatsApp.'],
@@ -66,6 +68,10 @@ export default function HowTo() {
       <div className="mt-8 flex flex-wrap gap-3">
         <Link to="/criar" className="btn-main h-12 px-6 text-base">Criar figurinha</Link>
         <Link to="/galeria" className="btn-soft h-12 px-6 text-base">Escolher na galeria</Link>
+      </div>
+
+      <div className="mt-16">
+        <BotCta />
       </div>
 
       {sendOn && (

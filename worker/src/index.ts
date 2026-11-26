@@ -590,7 +590,7 @@ async function route(req: Request, env: Env, url: URL): Promise<Response> {
   if (p === '/api/sounds/freesound') return await freesound(env, url)
   if (p === '/api/proxy' || p === '/api/img') return await proxy(url)
   if (p.startsWith('/api/f/')) return await file(env, p.slice(7))
-  if (p === '/api/send/config') return json({ enabled: !!(waNumber(env) && env.BOT_TOKEN) }, 200, { 'cache-control': 'public, max-age=60' })
+  if (p === '/api/send/config') return json({ enabled: !!(waNumber(env) && env.BOT_TOKEN), number: waNumber(env) || null }, 200, { 'cache-control': 'public, max-age=60' })
   if (p === '/api/send' && method === 'POST') return await createSend(req, env)
   const b = p.match(/^\/api\/bot\/send\/([^/]+)(?:\/(webp|ogg|done))?$/)
   if (b) return await botRoute(req, env, b[1], b[2])

@@ -1,5 +1,14 @@
 # Robô do Zapfig (receber figurinha pelo WhatsApp)
 
+O robô faz duas coisas:
+
+1. **Entrega figurinhas do site.** Responde `ZAPFIG <código>` com a figurinha, sem limite.
+2. **Cria figurinha pela conversa.** A pessoa manda foto, vídeo ou GIF. O robô pergunta em enquetes (é só tocar) se ela quer texto e som: o áudio dela, gravado ou em arquivo, ou um som de meme, com prévia antes de confirmar. Depois gera e manda a figurinha.
+   - Limite de 3 por pessoa por dia (`DAILY_LIMIT`).
+   - Figurinhas que a pessoa manda são ignoradas.
+   - "cancelar" recomeça.
+   - Arquivos: `flow.mjs` (conversa), `polls.mjs` (enquetes), `maker.mjs` (ffmpeg), `limits.mjs` (limite diário, salvo em `data/`).
+
 Quando alguém toca em **Receber no WhatsApp** no site, o WhatsApp abre com a mensagem `ZAPFIG ABC123` para o número do robô. A pessoa envia, e o robô responde com a figurinha: normal, animada ou **com som**.
 
 - O robô só responde. Nunca manda mensagem para quem não falou com ele primeiro.

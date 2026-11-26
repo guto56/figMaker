@@ -129,11 +129,11 @@ export const getPack = (id: string) => get<{ pack: RemotePack }>(`/api/packs/${i
 export const listPacks = () => get<{ items: RemotePack[] }>('/api/packs?limit=12').then((d) => d.items)
 
 /* receber pelo WhatsApp */
-let sendEnabled: Promise<boolean> | null = null
-export const sendConfig = () =>
-  (sendEnabled ??= get<{ enabled: boolean }>('/api/send/config')
-    .then((d) => d.enabled)
-    .catch(() => false))
+let sendCfg: Promise<{ enabled: boolean; number: string | null }> | null = null
+const loadSendCfg = () => (sendCfg ??= get<{ enabled: boolean; number: string | null }>('/api/send/config').catch(() => ({ enabled: false, number: null })))
+export const sendConfig = () => loadSendCfg().then((d) => d.enabled)
+/** Link para conversar com o robô e criar figurinha direto no WhatsApp. */
+export const botChatLink = () => loadSendCfg().then((d) => (d.enabled && d.number ? `https://wa.me/${d.number}?text=${encodeURIComponent('Oi! Quero fazer uma figurinha')}` : null))
 
 export type SendTicket = { code: string; text: string; link: string; expiresIn: number }
 export async function createSend(s: { kind: string; webp: Blob; ogg?: Blob | null }) {

@@ -15,6 +15,7 @@ import { randomBytes } from 'node:crypto'
 import { rmSync } from 'node:fs'
 import pino from 'pino'
 import qrcode from 'qrcode-terminal'
+import { createFlow } from './flow.mjs'
 import { inspectIncomingStickers } from './inspect.mjs'
 import { attachAudio, oggSeconds, patchStickerEncoder } from './sound-sticker.mjs'
 
@@ -83,12 +84,19 @@ async function sendSticker(sock, jid, job, quoted) {
   await sock.relayMessage(jid, msg.message, { messageId: msg.key.id })
 }
 
-async function handle(sock, m) {
+// criar figurinha pela conversa (foto/vídeo → texto → som → figurinha)
+const flow = createFlow({ sendSticker, log: console })
+
+async function handle(sock, m, live = true) {
   const jid = m.key.remoteJid
   if (!jid || m.key.fromMe || jid.endsWith('@g.us') || jid === 'status@broadcast' || jid.endsWith('@newsletter')) return
   const text = m.message?.conversation || m.message?.extendedTextMessage?.text || ''
   const found = text.match(CODE)
-  if (!found) return
+  if (!found) {
+    // pedidos que chegaram com o robô desligado: só os códigos do site são atendidos
+    if (live) await flow.onMessage(sock, m).catch((e) => console.error('conversa:', e?.message))
+    return
+  }
   const code = found[1].toUpperCase()
   if (!allowed(jid)) return
   await sock.readMessages([m.key]).catch(() => {})
@@ -162,7 +170,7 @@ async function start() {
       }
       if (handled.has(m.key.id)) continue
       handled.add(m.key.id)
-      handle(sock, m).catch((e) => console.error(e?.message))
+      handle(sock, m, type === 'notify').catch((e) => console.error(e?.message))
     }
   })
 }

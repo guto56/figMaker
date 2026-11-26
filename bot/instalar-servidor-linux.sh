@@ -12,13 +12,13 @@ DIR="$HOME/zapfig"
 echo "== 1/5 Pacotes do sistema"
 if command -v apt-get >/dev/null; then
   sudo apt-get update -y
-  sudo apt-get install -y git curl ca-certificates
+  sudo apt-get install -y git curl ca-certificates ffmpeg
   if ! command -v node >/dev/null || [ "$(node -p 'process.versions.node.split(".")[0]')" -lt 20 ]; then
     curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
     sudo apt-get install -y nodejs
   fi
 else
-  sudo dnf install -y git curl
+  sudo dnf install -y git curl ffmpeg || sudo dnf install -y git curl
   if ! command -v node >/dev/null || [ "$(node -p 'process.versions.node.split(".")[0]')" -lt 20 ]; then
     curl -fsSL https://rpm.nodesource.com/setup_22.x | sudo bash -
     sudo dnf install -y nodejs
