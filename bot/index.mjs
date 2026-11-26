@@ -19,7 +19,7 @@ import { createFlow } from './flow.mjs'
 import { inspectIncomingStickers } from './inspect.mjs'
 import { attachAudio, oggSeconds, patchStickerEncoder } from './sound-sticker.mjs'
 
-const API = (process.env.ZAPFIG_API || 'https://zapfig.hrycsngb42.workers.dev').replace(/\/$/, '')
+const API = (process.env.ZAPFIG_API || 'https://zapfig.site').replace(/\/$/, '')
 const TOKEN = process.env.BOT_TOKEN
 const PAIR_NUMBER = (process.env.PAIR_NUMBER || '').replace(/\D/g, '')
 const AUTH_DIR = process.env.AUTH_DIR || './auth'

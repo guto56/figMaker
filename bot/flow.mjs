@@ -7,7 +7,7 @@ import { cutoutAvailable, removeBackground } from './cutout.mjs'
 import { makeSticker, toStickerAudio } from './maker.mjs'
 import { readVote, sendPoll } from './polls.mjs'
 
-const SITE = (process.env.ZAPFIG_API || 'https://zapfig.hrycsngb42.workers.dev').replace(/\/$/, '')
+const SITE = (process.env.ZAPFIG_API || 'https://zapfig.site').replace(/\/$/, '')
 const SESSION_MS = 10 * 60 * 1000
 const MAX_MEDIA = 25 * 1024 * 1024
 // intervalo mínimo entre duas mensagens de boas-vindas para a mesma pessoa (minutos)

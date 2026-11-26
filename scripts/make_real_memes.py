@@ -18,7 +18,7 @@ WORK, OUT = sys.argv[1], sys.argv[2]
 os.makedirs(os.path.join(WORK, 'src'), exist_ok=True)
 os.makedirs(os.path.join(OUT, 'audio'), exist_ok=True)
 SPEC = json.load(open(os.path.join(os.path.dirname(__file__), 'real_memes.json'), encoding='utf-8'))
-H = 'https://zapfig.hrycsngb42.workers.dev'
+H = 'https://zapfig.site'
 UA = {'user-agent': 'zapfig-build', 'origin': H}
 
 

@@ -86,7 +86,7 @@ Como usar
 3. A figurinha com som está sendo liberada aos poucos pelo WhatsApp.
    Se o ícone de áudio não aparecer, a figurinha funciona sem som.
 
-Passo a passo completo: https://zapfig.hrycsngb42.workers.dev/como-usar
+Passo a passo completo: https://zapfig.site/como-usar
 `
 
 export async function zipStickers(items: Sticker[]) {

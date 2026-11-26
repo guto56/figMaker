@@ -48,7 +48,8 @@ function secure(res: Response): Response {
   return r
 }
 
-const UA = 'Mozilla/5.0 (compatible; Zapfig/1.0; +https://zapfig.hrycsngb42.workers.dev)'
+const CANONICAL_HOST = 'zapfig.site'
+const UA = 'Mozilla/5.0 (compatible; Zapfig/1.0; +https://zapfig.site)'
 const PROXY_HOSTS = ['imgflip.com', 'klipy.com', 'klipy.co', 'myinstants.com', 'freesound.org']
 
 class HttpError extends Error {
@@ -654,6 +655,10 @@ export default {
   },
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url)
+    // endereço oficial: zapfig.site (www e o antigo workers.dev redirecionam; a API segue nos três)
+    if (url.hostname !== CANONICAL_HOST && !url.pathname.startsWith('/api/') && (url.hostname === `www.${CANONICAL_HOST}` || url.hostname.endsWith('.workers.dev'))) {
+      return Response.redirect(`https://${CANONICAL_HOST}${url.pathname}${url.search}`, 301)
+    }
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(req)
     try {
       if (url.pathname.match(/^\/api\/stickers\/([^/]+)/) && !ID.test(url.pathname.split('/')[3] ?? '')) return secure(err('Figurinha não encontrada.', 404))

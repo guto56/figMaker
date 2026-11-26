@@ -1,6 +1,6 @@
 # Relatório de segurança: Zapfig
 
-Data: 25/11/2026. Alvo: `https://zapfig.hrycsngb42.workers.dev` (produção) e o código deste repositório (branch `claude/keen-cray-naswc6`).
+Data: 25/11/2026. Os testes foram feitos no endereço antigo (zapfig.hrycsngb42.workers.dev); em 26/11/2026 o site passou para zapfig.site, mesmo Worker. Alvo: `https://zapfig.site` (produção) e o código deste repositório (branch `claude/keen-cray-naswc6`).
 Testes repetíveis: `scripts/pentest.sh [host]`. Resultado antes das correções: **55 PASS, 20 FAIL**. Resultado depois das correções: **81 PASS, 0 FAIL** (86 com os testes do envio pelo WhatsApp, 26/11/2026).
 
 ## 1. Reconhecimento

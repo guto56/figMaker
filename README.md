@@ -2,7 +2,7 @@
 
 Figurinhas para WhatsApp com som, feitas no navegador: maker, galeria da comunidade e pacotes. Sem login.
 
-No ar: https://zapfig.hrycsngb42.workers.dev
+No ar: https://zapfig.site
 
 - `web/`: site (Vite + React + TypeScript + Tailwind). `npm run dev` dentro de `web/`.
 - `worker/`: Worker do Cloudflare (wrangler) que serve o site e a API:

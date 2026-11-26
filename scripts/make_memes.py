@@ -30,7 +30,7 @@ SPEC = json.load(open(os.path.join(os.path.dirname(__file__), 'memes.json'), enc
 TOKEN = os.environ['CLOUDFLARE_API_TOKEN']
 ACCOUNT = '762fe93850d238b22cac17ead40753c7'
 MODEL = '@cf/black-forest-labs/flux-2-klein-4b'
-ZAPFIG = 'https://zapfig.hrycsngb42.workers.dev'
+ZAPFIG = 'https://zapfig.site'
 FONT = os.path.join(WORK, 'Anton.ttf')
 STYLE = ('die-cut vinyl sticker, thick clean white border around the character, bold cartoon illustration, '
          'flat vibrant colors, simple shapes, expressive face, centered, single character, '
