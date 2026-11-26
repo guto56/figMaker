@@ -15,6 +15,7 @@ import { randomBytes } from 'node:crypto'
 import { rmSync } from 'node:fs'
 import pino from 'pino'
 import qrcode from 'qrcode-terminal'
+import { inspectIncomingStickers } from './inspect.mjs'
 import { attachAudio, oggSeconds, patchStickerEncoder, waveform } from './sound-sticker.mjs'
 
 const API = (process.env.ZAPFIG_API || 'https://zapfig.hrycsngb42.workers.dev').replace(/\/$/, '')
@@ -30,6 +31,7 @@ const log = pino({ level: process.env.LOG_LEVEL || 'warn' })
 const CODE = /\bZAPFIG\s+([A-Z2-9]{6})\b/i
 
 patchStickerEncoder()
+inspectIncomingStickers()
 
 // anti-abuso por pessoa: no máximo 15 figurinhas por hora
 const perSender = new Map()
