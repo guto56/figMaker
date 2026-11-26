@@ -10,6 +10,7 @@
   "dependencies": {
     "@whiskeysockets/baileys": "7.0.0-rc14",
     "dotenv": "^16.6.1",
+    "link-preview-js": "^3.2.0",
     "onnxruntime-node": "^1.31.1",
     "pino": "^9.14.0",
     "qrcode-terminal": "^0.12.0",

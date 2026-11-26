@@ -32,7 +32,7 @@ const log = pino({ level: process.env.LOG_LEVEL || 'warn' })
 const CODE = /\bZAPFIG\s+([A-Z2-9]{6})\b/i
 
 patchStickerEncoder()
-inspectIncomingStickers()
+if (process.env.DUMP_STICKERS === "1") inspectIncomingStickers() // diagnóstico, desligado por padrão
 
 // anti-abuso por pessoa: no máximo 15 figurinhas por hora
 const perSender = new Map()
