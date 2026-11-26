@@ -64,7 +64,7 @@ else
 fi
 
 say "6/7 Esperando o robô instalar (3 a 8 minutos)"
-SSH=(gcloud compute ssh "$NAME" --zone "$ZONE" --quiet --ssh-flag=-oConnectTimeout=10 --command)
+SSH=(gcloud compute ssh "$NAME" --zone "$ZONE" --quiet --ssh-flag=-n --ssh-flag=-oConnectTimeout=10 --command)
 for i in $(seq 1 60); do
   if "${SSH[@]}" 'systemctl is-active --quiet zapfig-bot' >/dev/null 2>&1; then echo "robô instalado"; break; fi
   printf '.'; sleep 10

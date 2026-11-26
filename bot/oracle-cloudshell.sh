@@ -98,7 +98,7 @@ IP=$(oci compute instance list-vnics --instance-id "$INST" --query 'data[0]."pub
 echo "máquina ligada. IP: $IP"
 
 say "6/7 Esperando o robô instalar (3 a 8 minutos)"
-SSH="ssh -i $KEY -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=yes ubuntu@$IP"
+SSH="ssh -n -i $KEY -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=yes ubuntu@$IP"
 for i in $(seq 1 60); do
   if $SSH 'systemctl is-active --quiet zapfig-bot' 2>/dev/null; then echo "robô instalado"; break; fi
   printf '.'; sleep 10
