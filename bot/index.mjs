@@ -16,7 +16,7 @@ import { rmSync } from 'node:fs'
 import pino from 'pino'
 import qrcode from 'qrcode-terminal'
 import { createFlow } from './flow.mjs'
-import { toStickerAudio, uniqueOgg } from './maker.mjs'
+import { STICKER_AUDIO_MAX, toStickerAudio, uniqueOgg } from './maker.mjs'
 import { inspectIncomingStickers } from './inspect.mjs'
 import { attachAudio, oggSeconds, patchStickerEncoder } from './sound-sticker.mjs'
 
@@ -78,9 +78,9 @@ async function sendSticker(sock, jid, job, quoted) {
   media.stickerMessage.isAnimated = job.kind === 'animated'
   if (job.ogg) {
     // arquivo único a cada envio (a prévia e reenvios da mesma figurinha usam o mesmo som)
-    // som pesado (o site grava a 64 kbps) não toca na figurinha: recomprime para ficar leve
+    // som longo ou pesado não toca na figurinha: corta em STICKER_AUDIO_MAX s e recomprime
     let ogg = job.ogg
-    if (ogg.length > 45000) ogg = await toStickerAudio(ogg, 'ogg', 10).catch(() => ogg)
+    if (ogg.length > 30000 || oggSeconds(ogg) > STICKER_AUDIO_MAX) ogg = await toStickerAudio(ogg, 'ogg', STICKER_AUDIO_MAX).catch(() => ogg)
     job = { ...job, ogg: await uniqueOgg(ogg).catch(() => ogg) }
     const { audioMessage } = await prepareWAMessageMedia({ audio: job.ogg, mimetype: 'audio/ogg; codecs=opus' }, upload)
     // igual ao áudio de uma figurinha com som feita no app: sem ptt e sem waveform

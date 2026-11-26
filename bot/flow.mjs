@@ -4,7 +4,7 @@
 import { downloadMediaMessage, jidNormalizedUser } from '@whiskeysockets/baileys'
 import { DAILY_LIMIT, consume, remaining } from './limits.mjs'
 import { cutoutAvailable, removeBackground } from './cutout.mjs'
-import { makeSticker, toStickerAudio, uniqueOgg } from './maker.mjs'
+import { STICKER_AUDIO_MAX, makeSticker, toStickerAudio, uniqueOgg } from './maker.mjs'
 import { readVote, sendPoll } from './polls.mjs'
 
 const SITE = (process.env.ZAPFIG_API || 'https://zapfig.site').replace(/\/$/, '')
@@ -143,7 +143,7 @@ export function createFlow({ sendSticker, log = console, fetchMedia = download }
   async function loadSound(item) {
     const r = await fetch(SITE + item.url)
     if (!r.ok) throw new Error('não baixou o som')
-    return toStickerAudio(Buffer.from(await r.arrayBuffer()), 'mp3', 10)
+    return toStickerAudio(Buffer.from(await r.arrayBuffer()), 'mp3', STICKER_AUDIO_MAX)
   }
 
   async function previewAndConfirm(sock, s, ogg, title, kind) {
@@ -152,7 +152,7 @@ export function createFlow({ sendSticker, log = console, fetchMedia = download }
     await sock.sendMessage(s.jid, { audio: await uniqueOgg(ogg).catch(() => ogg), mimetype: 'audio/ogg; codecs=opus', ptt: true })
     if (kind === 'mine') {
       s.stage = 'audio-confirm'
-      await ask(sock, s, 'Ouviu? Vai ficar assim na figurinha (até 10 s).', [OPT.ok, OPT.otherAudio, OPT.noSound])
+      await ask(sock, s, 'Ouviu? Vai ficar assim na figurinha (até 6 s).', [OPT.ok, OPT.otherAudio, OPT.noSound])
     } else {
       s.stage = 'meme-confirm'
       await ask(sock, s, `Som: ${title}. É esse?`, [OPT.thisOne, OPT.otherSound, OPT.noSound])
@@ -267,7 +267,7 @@ export function createFlow({ sendSticker, log = console, fetchMedia = download }
         if (a === OPT.noSound) return generate(sock, s)
         if (a === OPT.myAudio) {
           s.stage = 'audio-input'
-          return say(sock, jid, 'Pode mandar o áudio: grave segurando o 🎤, envie um arquivo de áudio ou mande um *vídeo* que eu uso o som dele. Uso até 10 segundos.')
+          return say(sock, jid, 'Pode mandar o áudio: grave segurando o 🎤, envie um arquivo de áudio ou mande um *vídeo* que eu uso o som dele. Uso até 6 segundos.')
         }
         return askMeme(sock, s)
 
@@ -275,7 +275,7 @@ export function createFlow({ sendSticker, log = console, fetchMedia = download }
         const au = audioOf(m) || videoAudioOf(m)
         if (!au) return
         try {
-          const ogg = await toStickerAudio(await fetchMedia(sock, m), au.ext, 10)
+          const ogg = await toStickerAudio(await fetchMedia(sock, m), au.ext, STICKER_AUDIO_MAX)
           return previewAndConfirm(sock, s, ogg, 'seu áudio', 'mine')
         } catch {
           return say(sock, jid, au.video ? 'Esse vídeo não tem som (ou não consegui tirar o som dele). Mande um áudio ou outro vídeo.' : 'Não consegui usar esse áudio. Tente gravar de novo.')
@@ -294,7 +294,7 @@ export function createFlow({ sendSticker, log = console, fetchMedia = download }
         if (a === OPT.useNewSound) {
           let ogg
           try {
-            ogg = await toStickerAudio(await fetchMedia(sock, p.m), p.media.ext, 10)
+            ogg = await toStickerAudio(await fetchMedia(sock, p.m), p.media.ext, STICKER_AUDIO_MAX)
           } catch {
             await say(sock, jid, 'Esse vídeo não tem som (ou não consegui tirar o som dele). Continuando com a anterior: responda a pergunta de cima.')
             return
