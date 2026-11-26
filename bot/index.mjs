@@ -16,7 +16,7 @@ import { rmSync } from 'node:fs'
 import pino from 'pino'
 import qrcode from 'qrcode-terminal'
 import { createFlow } from './flow.mjs'
-import { STICKER_AUDIO_MAX, toStickerAudio, uniqueOgg } from './maker.mjs'
+import { STICKER_AUDIO_MAX, stillToAnimated, toStickerAudio, uniqueOgg } from './maker.mjs'
 import { inspectIncomingStickers } from './inspect.mjs'
 import { attachAudio, oggSeconds, patchStickerEncoder } from './sound-sticker.mjs'
 
@@ -73,6 +73,11 @@ async function fetchJob(code) {
 }
 
 async function sendSticker(sock, jid, job, quoted) {
+  // com som, a figurinha vai sempre como animada (igual às criadas no app)
+  if (job.ogg && job.kind !== 'animated') {
+    const webp = await stillToAnimated(job.webp).catch(() => null)
+    if (webp) job = { ...job, webp, kind: 'animated' }
+  }
   const upload = { upload: sock.waUploadToServer }
   const media = await prepareWAMessageMedia({ sticker: job.webp, isAnimated: job.kind === 'animated' }, upload)
   media.stickerMessage.isAnimated = job.kind === 'animated'
