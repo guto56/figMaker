@@ -9,6 +9,8 @@ import { readVote, sendPoll } from './polls.mjs'
 const SITE = (process.env.ZAPFIG_API || 'https://zapfig.hrycsngb42.workers.dev').replace(/\/$/, '')
 const SESSION_MS = 10 * 60 * 1000
 const MAX_MEDIA = 25 * 1024 * 1024
+// intervalo mínimo entre duas mensagens de boas-vindas para a mesma pessoa (minutos)
+const HELP_EVERY_MS = Number(process.env.HELP_EVERY_MIN || 5) * 60 * 1000
 
 const MEME_SOUNDS = [
   ['💥 Vine boom', 'vine boom'],
@@ -342,10 +344,10 @@ export function createFlow({ sendSticker, log = console, fetchMedia = download }
       await safeStep(sock, s, m, null)
       return true
     }
-    // mensagem solta: explica uma vez a cada 6 horas
+    // mensagem solta: explica como funciona (no máximo uma vez a cada HELP_EVERY_MIN minutos)
     if (textOf(m) || audioOf(m)) {
       const last = helpSentAt.get(user) || 0
-      if (Date.now() - last > 6 * 60 * 60 * 1000) {
+      if (Date.now() - last > HELP_EVERY_MS) {
         helpSentAt.set(user, Date.now())
         await say(sock, jid,
           `Oi! Eu sou o robô do Zapfig 🤖\n\nMe mande uma *foto, vídeo ou GIF* que eu transformo em figurinha, com texto e som se você quiser. São ${DAILY_LIMIT} por dia.\n\nNo site dá para criar à vontade: ${SITE}`)
