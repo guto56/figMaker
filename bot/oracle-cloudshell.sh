@@ -46,7 +46,9 @@ fi
 echo "rede ok"
 
 say "3/7 Chave SSH"
-[ -f ~/.ssh/id_ed25519 ] || ssh-keygen -t ed25519 -N "" -f ~/.ssh/id_ed25519 -q
+# o Cloud Shell roda em modo FIPS: só aceita chave RSA
+KEY=~/.ssh/zapfig_rsa
+[ -f "$KEY" ] || ssh-keygen -t rsa -b 4096 -N "" -f "$KEY" -q
 echo "chave ok"
 
 say "4/7 Instalação automática na primeira inicialização"
@@ -71,7 +73,7 @@ else
     # shellcheck disable=SC2086
     oci compute instance launch -c "$C" --availability-domain "$AD" --display-name "$NAME" \
       --shape "$shape" $extra --image-id "$img" --subnet-id "$SUBNET" --assign-public-ip true \
-      --ssh-authorized-keys-file ~/.ssh/id_ed25519.pub --user-data-file "$UD" \
+      --ssh-authorized-keys-file "$KEY.pub" --user-data-file "$UD" \
       --wait-for-state RUNNING --max-wait-seconds 900 --query data.id --raw-output
   }
   INST=""
@@ -90,7 +92,7 @@ IP=$(oci compute instance list-vnics --instance-id "$INST" --query 'data[0]."pub
 echo "máquina ligada. IP: $IP"
 
 say "6/7 Esperando o robô instalar (3 a 8 minutos)"
-SSH="ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=yes ubuntu@$IP"
+SSH="ssh -i $KEY -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=yes ubuntu@$IP"
 for i in $(seq 1 60); do
   if $SSH 'systemctl is-active --quiet zapfig-bot' 2>/dev/null; then echo "robô instalado"; break; fi
   printf '.'; sleep 10
