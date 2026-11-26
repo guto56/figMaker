@@ -10,8 +10,6 @@ import { readVote, sendPoll } from './polls.mjs'
 const SITE = (process.env.ZAPFIG_API || 'https://zapfig.site').replace(/\/$/, '')
 const SESSION_MS = 10 * 60 * 1000
 const MAX_MEDIA = 25 * 1024 * 1024
-// intervalo mínimo entre duas mensagens de boas-vindas para a mesma pessoa (minutos)
-const HELP_EVERY_MS = Number(process.env.HELP_EVERY_MIN || 5) * 60 * 1000
 
 const MEME_SOUNDS = [
   ['💥 Vine boom', 'vine boom'],
@@ -46,7 +44,6 @@ const OPT = {
 }
 
 const sessions = new Map()
-const helpSentAt = new Map()
 const norm = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\p{L}\p{N} ]/gu, '').trim().toLowerCase()
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -421,10 +418,7 @@ export function createFlow({ sendSticker, log = console, fetchMedia = download }
       text = 'Tamo junto! 😄 Quando quiser outra, é só mandar uma foto, vídeo ou GIF.'
     }
     if (!text) {
-      const first = now - (helpSentAt.get(user) || 0) > HELP_EVERY_MS
-      helpSentAt.set(user, now)
-      const intro = c.stickerMessage ? 'Figurinha boa! 😄 ' : first ? 'Oi! Eu sou o robô do Zapfig 🤖\n\n' : ''
-      text = `${intro}Me mande uma *foto, vídeo ou GIF* que eu transformo em figurinha, com texto e som se quiser. ${quota}\n\nOutras coisas que eu entendo:\n• *som* → figurinhas com áudio\n• *galeria* → todas as figurinhas\n• *limite* → quantas ainda pode fazer\n• *site* → criar à vontade no site`
+      text = `Oi! Eu sou o robô do Zapfig 🤖\n\nMe mande uma *foto, vídeo ou GIF* que eu transformo em figurinha, com texto e som se você quiser. São ${DAILY_LIMIT} por dia.\n\nNo site dá para criar à vontade: ${SITE}`
     }
     await say(sock, jid, text, m)
   }
