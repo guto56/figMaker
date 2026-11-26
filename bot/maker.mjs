@@ -81,7 +81,7 @@ export async function toStickerAudio(data, ext = 'bin', maxSeconds = 10) {
     const output = join(dir, 'som.ogg')
     await writeFile(input, data)
     await ffmpeg(['-t', String(maxSeconds), '-i', input, '-vn', '-af', `afade=t=out:st=${maxSeconds - 0.3}:d=0.3`, '-ac', '1', '-ar', '48000',
-      '-c:a', 'libopus', '-b:a', '48k', output])
+      '-c:a', 'libopus', '-b:a', '32k', '-vbr', 'constrained', output])
     const out = await readFile(output)
     if (out.length < 1200) throw new Error('áudio vazio')
     return out
