@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { AudioEditor, actx, fmt, type AudioClip } from '../components/AudioEditor'
 import { MemeSearch, type Picked } from '../components/MemeSearch'
+import { ReceiveWhatsApp } from '../components/ReceiveWhatsApp'
 import { getSticker, publishSticker, toSticker, type RemoteSticker } from '../lib/api'
 import { SoundIcon, useSound, useUrl } from '../components/StickerTile'
 import { arrange, canvasToWebp, defaultLayout, hitTest, layerImg, loadImage, newLayer, renderStatic, textOverlay, type Arrange, type ImgLayer, type Layout } from '../lib/compose'
@@ -645,6 +646,7 @@ export default function Maker() {
                       </div>
                     </section>
 
+                    <ReceiveWhatsApp kind={result.kind} getFiles={async () => ({ webp: result.webp, ogg: result.ogg })} />
                     <section className="panel grid gap-4 p-5" aria-label="Baixar">
                       <div className="grid gap-3 sm:grid-cols-2">
                         <label className="grid gap-1"><span className="label">Nome</span>

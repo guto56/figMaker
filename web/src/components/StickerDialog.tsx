@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { countDownload, deleteRemote, editTokens, reportSticker } from '../lib/api'
 import { asBlob, deleteSticker, download, shareSticker, slug, zipStickers, type Sticker } from '../lib/store'
 import { SoundIcon, useSound, useUrl } from './StickerTile'
+import { ReceiveWhatsApp } from './ReceiveWhatsApp'
 
 type DetailProps = { sticker: Sticker; onClose?: () => void; onDeleted?: (id: string) => void; page?: boolean }
 
@@ -57,6 +58,13 @@ export function StickerDetail({ sticker, onClose, onDeleted, page }: DetailProps
           </button>
         )}
         <div className="mt-auto grid gap-2">
+          <ReceiveWhatsApp
+            kind={sticker.kind}
+            getFiles={async () => {
+              counted()
+              return { webp: await asBlob(sticker.webp), ogg: sticker.ogg ? await asBlob(sticker.ogg) : null }
+            }}
+          />
           <button className="btn-main" onClick={async () => { counted(); download(await zipStickers([sticker]), `${name}.zip`) }}>
             Baixar figurinha {sticker.ogg ? 'e som (.zip)' : '(.zip)'}
           </button>

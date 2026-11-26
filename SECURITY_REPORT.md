@@ -1,7 +1,7 @@
 # Relatório de segurança: Zapfig
 
 Data: 25/11/2026. Alvo: `https://zapfig.hrycsngb42.workers.dev` (produção) e o código deste repositório (branch `claude/keen-cray-naswc6`).
-Testes repetíveis: `scripts/pentest.sh [host]`. Resultado antes das correções: **55 PASS, 20 FAIL**. Resultado depois das correções: **81 PASS, 0 FAIL**.
+Testes repetíveis: `scripts/pentest.sh [host]`. Resultado antes das correções: **55 PASS, 20 FAIL**. Resultado depois das correções: **81 PASS, 0 FAIL** (86 com os testes do envio pelo WhatsApp, 26/11/2026).
 
 ## 1. Reconhecimento
 
@@ -34,6 +34,9 @@ Testes repetíveis: `scripts/pentest.sh [host]`. Resultado antes das correções
 | `/api/packs` | GET / POST | não (limite + mesma origem) | JSON `name`, `author`, `stickerIds`, `coverId` | lista / `id` |
 | `/api/packs/<id>` | GET | não | id | pacote com figurinhas |
 | `/api/packs/<id>/download` | POST | não | id | ok |
+| `/api/send/config` | GET | não | — | se o envio pelo WhatsApp está ligado |
+| `/api/send` | POST | não (limite 10/min por faixa + mesma origem) | multipart `kind`, `webp`, `ogg` (mesma validação do publicar) | código de 6 caracteres e link `wa.me` (vale 30 min, uso único) |
+| `/api/bot/send/<código>[/webp\|/ogg\|/done]` | GET/POST | **sim**: `Authorization: Bearer BOT_TOKEN` (comparação em tempo constante) | código | arquivos da figurinha para o robô; `done` apaga |
 
 ## 2. Segredos
 
@@ -72,6 +75,7 @@ Como verifiquei:
 | V14 | Baixa | `@imgly/background-removal` → `zod@3` | GHSA-mrhx-c7xc-m3w5 (consumo de memória ao validar coleções enormes). A biblioteca usa o zod só para validar a própria configuração, que é fixa no código; nenhuma entrada do usuário chega nele. | `npm audit` (2 high) | Não há versão corrigida sem trocar de versão maior da biblioteca. Risco aceito e monitorado. | Pendente (aceito) |
 | V15 | Baixa | `worker/src/index.ts` (todas as entradas) | Validação de entrada feita à mão, sem schema. | — | `zod@4.6.7` (versão corrigida) em publicar figurinha e pacote: nome e tags limpos de caracteres de controle e invisíveis, limites de tamanho, `kind` enum, IDs `^[a-z0-9]{10}$` validados antes da rota. | Corrigido |
 | V16 | Info | Design | Publicar é anônimo (sem login). Spam distribuído por muitas faixas de rede ainda é possível dentro dos limites. | — | Mitigado pelos limites por faixa, pelo teto global e pela validação. Recomendação: Cloudflare Turnstile no botão Publicar. | Pendente (recomendação) |
+| V18 | Info | `bot/` (robô do WhatsApp) | O robô usa conexão não oficial (Baileys) com o número secundário: risco de banimento, que o dono aceitou. Mitigações: só responde a quem escreve primeiro, ignora grupos e status, limite de 15 por pessoa por hora, a sessão (`auth/`) fica fora do git e só o robô tem o `BOT_TOKEN`. | — | — | Aceito |
 | V17 | Info | Chat desta conversa | O token Cloudflare e as chaves KLIPY e Freesound foram colados no chat. Não estão no git nem no site, mas ficaram registrados fora do seu controle. | — | Rotacionar (ver seção 6). | Pendente manual |
 
 Sem achados nestas áreas:

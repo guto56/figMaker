@@ -26,6 +26,8 @@ export interface Env {
   KLIPY_KEY: string
   FREESOUND_KEY: string
   IP_SALT: string
+  BOT_TOKEN: string
+  WA_NUMBER: string
 }
 
 /** Cabeçalhos de segurança em todas as respostas da API. */
@@ -330,19 +332,10 @@ function stickerOut(r: any) {
 const isWebp = (b: Uint8Array) => b.length > 12 && String.fromCharCode(...b.slice(0, 4)) === 'RIFF' && String.fromCharCode(...b.slice(8, 12)) === 'WEBP'
 const isOgg = (b: Uint8Array) => b.length > 4 && String.fromCharCode(...b.slice(0, 4)) === 'OggS'
 
-async function publishSticker(req: Request, env: Env) {
-  if (await limited(env, `pub:${ip(req)}`, 40)) return err('Muitas publicações seguidas. Espere um minuto.', 429)
-  const len = Number(req.headers.get('content-length') ?? 0)
-  if (!len || len > 1024 * 1024) return err('Arquivo grande demais.', 413)
-  let form: FormData
-  try {
-    form = await req.formData()
-  } catch {
-    return err('Pedido inválido.')
-  }
-  const parsed = StickerForm.safeParse({ name: form.get('name') ?? '', tags: form.get('tags') ?? '', kind: form.get('kind') })
-  if (!parsed.success) return err(parsed.error.issues[0]?.message?.startsWith('Dê') ? parsed.error.issues[0].message : 'Dados inválidos.')
-  const { name, tags, kind } = parsed.data
+type StickerFiles = { webp: Uint8Array; ogg: Uint8Array | null }
+
+/** Lê e valida a imagem WebP (512×512, limites do WhatsApp) e o som OGG opcional. */
+async function readStickerFiles(form: FormData, kind: 'static' | 'animated'): Promise<StickerFiles | Response> {
   const webpF = form.get('webp')
   const oggF = form.get('ogg')
   if (!(webpF instanceof File)) return err('Falta a imagem.')
@@ -358,6 +351,25 @@ async function publishSticker(req: Request, env: Env) {
     ogg = new Uint8Array(await oggF.arrayBuffer())
     if (!isOgg(ogg)) return err('O som precisa ser OGG de até 10 s.')
   }
+  return { webp, ogg }
+}
+
+async function publishSticker(req: Request, env: Env) {
+  if (await limited(env, `pub:${ip(req)}`, 40)) return err('Muitas publicações seguidas. Espere um minuto.', 429)
+  const len = Number(req.headers.get('content-length') ?? 0)
+  if (!len || len > 1024 * 1024) return err('Arquivo grande demais.', 413)
+  let form: FormData
+  try {
+    form = await req.formData()
+  } catch {
+    return err('Pedido inválido.')
+  }
+  const parsed = StickerForm.safeParse({ name: form.get('name') ?? '', tags: form.get('tags') ?? '', kind: form.get('kind') })
+  if (!parsed.success) return err(parsed.error.issues[0]?.message?.startsWith('Dê') ? parsed.error.issues[0].message : 'Dados inválidos.')
+  const { name, tags, kind } = parsed.data
+  const files = await readStickerFiles(form, kind)
+  if (files instanceof Response) return files
+  const { webp, ogg } = files
   const id = rid()
   const token = rid(24)
   await env.FILES.put(`s/${id}.webp`, webp, { metadata: { type: 'image/webp' } })
@@ -495,6 +507,61 @@ async function file(env: Env, key: string) {
   return new Response(value, { headers: { 'content-type': metadata?.type === 'audio/ogg' ? 'audio/ogg' : 'image/webp', 'cache-control': 'public, max-age=86400', 'content-disposition': 'inline' } })
 }
 
+/* ---------------- receber pelo WhatsApp ---------------- */
+// O site guarda a figurinha por 30 min com um código. A pessoa manda "ZAPFIG <código>"
+// para o número do robô, que busca os arquivos aqui (com BOT_TOKEN) e responde.
+const SEND_TTL = 1800
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+const SEND_CODE = /^[A-Z2-9]{6}$/
+const newCode = () => {
+  const a = new Uint8Array(6)
+  crypto.getRandomValues(a)
+  return Array.from(a, (b) => CODE_ALPHABET[b % 32]).join('')
+}
+const waNumber = (env: Env) => (env.WA_NUMBER ?? '').replace(/\D/g, '')
+
+async function createSend(req: Request, env: Env) {
+  if (!waNumber(env) || !env.BOT_TOKEN) return err('O envio pelo WhatsApp ainda não está ligado.', 503)
+  if (await limited(env, `send:${ip(req)}`, 10)) return err('Muitos envios seguidos. Espere um minuto.', 429)
+  const len = Number(req.headers.get('content-length') ?? 0)
+  if (!len || len > 1024 * 1024) return err('Arquivo grande demais.', 413)
+  let form: FormData
+  try {
+    form = await req.formData()
+  } catch {
+    return err('Pedido inválido.')
+  }
+  const kind = form.get('kind') === 'animated' ? 'animated' : 'static'
+  const files = await readStickerFiles(form, kind)
+  if (files instanceof Response) return files
+  const code = newCode()
+  const opts = { expirationTtl: SEND_TTL }
+  await env.FILES.put(`snd/${code}.webp`, files.webp, opts)
+  if (files.ogg) await env.FILES.put(`snd/${code}.ogg`, files.ogg, opts)
+  await env.FILES.put(`snd/${code}.json`, JSON.stringify({ kind, hasSound: !!files.ogg, createdAt: Date.now() }), opts)
+  const text = `ZAPFIG ${code}`
+  return json({ code, text, link: `https://wa.me/${waNumber(env)}?text=${encodeURIComponent(text)}`, expiresIn: SEND_TTL }, 201, { 'cache-control': 'no-store' })
+}
+
+async function botRoute(req: Request, env: Env, code: string, part?: string) {
+  const auth = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
+  if (!env.BOT_TOKEN || !auth || !(await sameHash(await sha(auth), await sha(env.BOT_TOKEN)))) return err('Não autorizado.', 401)
+  if (!SEND_CODE.test(code)) return err('Código inválido.', 404)
+  const meta = await env.FILES.get(`snd/${code}.json`)
+  if (!meta) return err('Código expirado ou já usado.', 404)
+  if (req.method === 'GET' && !part) return new Response(meta, { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } })
+  if (req.method === 'GET' && (part === 'webp' || part === 'ogg')) {
+    const v = await env.FILES.get(`snd/${code}.${part}`, 'arrayBuffer')
+    if (!v) return err('não encontrado', 404)
+    return new Response(v, { headers: { 'content-type': part === 'webp' ? 'image/webp' : 'audio/ogg', 'cache-control': 'no-store' } })
+  }
+  if (req.method === 'POST' && part === 'done') {
+    await Promise.all(['json', 'webp', 'ogg'].map((x) => env.FILES.delete(`snd/${code}.${x}`)))
+    return json({ ok: true })
+  }
+  return err('Método não permitido.', 405)
+}
+
 /* ---------------- roteamento ---------------- */
 function crossSite(req: Request, url: URL) {
   const origin = req.headers.get('origin')
@@ -523,6 +590,10 @@ async function route(req: Request, env: Env, url: URL): Promise<Response> {
   if (p === '/api/sounds/freesound') return await freesound(env, url)
   if (p === '/api/proxy' || p === '/api/img') return await proxy(url)
   if (p.startsWith('/api/f/')) return await file(env, p.slice(7))
+  if (p === '/api/send/config') return json({ enabled: !!(waNumber(env) && env.BOT_TOKEN) }, 200, { 'cache-control': 'public, max-age=60' })
+  if (p === '/api/send' && method === 'POST') return await createSend(req, env)
+  const b = p.match(/^\/api\/bot\/send\/([^/]+)(?:\/(webp|ogg|done))?$/)
+  if (b) return await botRoute(req, env, b[1], b[2])
   if (p === '/api/stickers') return await (req.method === "POST" ? publishSticker(req, env) : listStickers(env, url))
   let m = p.match(/^\/api\/stickers\/([a-z0-9]+)(?:\/(download|report))?$/)
   if (m) return await stickerRoute(req, env, m[1], m[2])

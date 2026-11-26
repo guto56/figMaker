@@ -127,3 +127,22 @@ export async function publishPack(p: { name: string; author: string; stickerIds:
 }
 export const getPack = (id: string) => get<{ pack: RemotePack }>(`/api/packs/${id}`).then((d) => d.pack)
 export const listPacks = () => get<{ items: RemotePack[] }>('/api/packs?limit=12').then((d) => d.items)
+
+/* receber pelo WhatsApp */
+let sendEnabled: Promise<boolean> | null = null
+export const sendConfig = () =>
+  (sendEnabled ??= get<{ enabled: boolean }>('/api/send/config')
+    .then((d) => d.enabled)
+    .catch(() => false))
+
+export type SendTicket = { code: string; text: string; link: string; expiresIn: number }
+export async function createSend(s: { kind: string; webp: Blob; ogg?: Blob | null }) {
+  const f = new FormData()
+  f.set('kind', s.kind)
+  f.set('webp', new File([s.webp], 'figurinha.webp', { type: 'image/webp' }))
+  if (s.ogg) f.set('ogg', new File([s.ogg], 'som.ogg', { type: 'audio/ogg' }))
+  const r = await fetch('/api/send', { method: 'POST', body: f })
+  const d = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(d.error || 'Não deu para preparar o envio.')
+  return d as SendTicket
+}
