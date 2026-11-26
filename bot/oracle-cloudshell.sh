@@ -69,24 +69,30 @@ else
     local img
     img=$(oci compute image list -c "$C" --operating-system "Canonical Ubuntu" --operating-system-version "24.04" \
       --shape "$shape" --sort-by TIMECREATED --sort-order DESC --query 'data[0].id' --raw-output)
-    echo "imagem Ubuntu 24.04 para $shape: ${img:0:40}…"
+    echo "  imagem Ubuntu 24.04 para $shape" >&2
     # shellcheck disable=SC2086
     oci compute instance launch -c "$C" --availability-domain "$AD" --display-name "$NAME" \
       --shape "$shape" $extra --image-id "$img" --subnet-id "$SUBNET" --assign-public-ip true \
       --ssh-authorized-keys-file "$KEY.pub" --user-data-file "$UD" \
       --wait-for-state RUNNING --max-wait-seconds 900 --query data.id --raw-output
   }
+  # São Paulo vive sem vaga: tenta ARM e AMD alternando, a cada minuto, até conseguir
   INST=""
-  if [ "${SHAPE:-}" = "A1" ]; then
-    INST=$(launch VM.Standard.A1.Flex '--shape-config {"ocpus":1,"memoryInGBs":6}' || true)
-    [ -n "$INST" ] || echo "ARM sem vaga agora; vou de AMD Micro."
-  fi
-  if [ -z "$INST" ]; then
-    INST=$(launch VM.Standard.E2.1.Micro "") || {
-      echo "Não consegui criar a máquina. Se a mensagem acima fala em 'Out of capacity' ou 'LimitExceeded', me mande um print."
-      exit 1
-    }
-  fi
+  MAX="${TENTATIVAS:-120}"
+  for n in $(seq 1 "$MAX"); do
+    echo "tentativa $n de $MAX: ARM (VM.Standard.A1.Flex)"
+    INST=$(launch VM.Standard.A1.Flex '--shape-config {"ocpus":1,"memoryInGBs":6}' 2>/tmp/zapfig-err || true)
+    [ -n "$INST" ] && break
+    grep -q "LimitExceeded\|NotAuthorized" /tmp/zapfig-err && { cat /tmp/zapfig-err; echo "Erro de limite/permissão: me mande um print."; exit 1; }
+    echo "  sem vaga. AMD (VM.Standard.E2.1.Micro)"
+    INST=$(launch VM.Standard.E2.1.Micro "" 2>/tmp/zapfig-err || true)
+    [ -n "$INST" ] && break
+    grep -q "LimitExceeded\|NotAuthorized" /tmp/zapfig-err && { cat /tmp/zapfig-err; echo "Erro de limite/permissão: me mande um print."; exit 1; }
+    echo "  sem vaga. Tentando de novo em 60 s ($(date +%H:%M))"
+    sleep 60
+  done
+  [ -n "$INST" ] || { echo "Sem vaga depois de $MAX tentativas. Rode o comando de novo mais tarde."; exit 1; }
+  INST=$(echo "$INST" | grep -o 'ocid1.instance[^" ]*' | head -1)
 fi
 IP=$(oci compute instance list-vnics --instance-id "$INST" --query 'data[0]."public-ip"' --raw-output)
 echo "máquina ligada. IP: $IP"
