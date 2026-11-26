@@ -1,8 +1,8 @@
-// Figurinha com som. O WhatsApp guarda o áudio dentro da própria figurinha
-// (StickerMessage, campo 26 = AudioMessage) e, nas versões novas, embrulha a
-// figurinha em Message.audioStickerMessage (campo 134, um FutureProofMessage
-// cujo campo 1 é a Message com a figurinha). Versões antigas leem só a
-// figurinha; as novas leem o embrulho e tocam o som. O Baileys ainda não conhece
+// Figurinha com som, no mesmo formato que o próprio WhatsApp envia (conferido
+// numa figurinha com som criada no app): o áudio vai dentro da figurinha
+// (StickerMessage, campo 26 = AudioMessage, sem ptt nem waveform) e a figurinha
+// vai só dentro de Message.audioStickerMessage (campo 134, FutureProofMessage
+// cujo campo 1 é a Message com a figurinha), junto com messageContextInfo. O Baileys ainda não conhece
 // nenhum dos dois campos, então os codificadores são estendidos aqui.
 import { proto } from '@whiskeysockets/baileys'
 
@@ -39,16 +39,18 @@ export function patchStickerEncoder() {
     return w
   }
 
-  // 2) embrulho audioStickerMessage (campo 134) ao lado da figurinha
+  // 2) como o WhatsApp faz: a figurinha com som vai SÓ dentro do embrulho
+  //    audioStickerMessage (campo 134 > campo 1 = Message > campo 26 = figurinha),
+  //    sem a figurinha solta no topo da mensagem
   const messageEncode = proto.Message.encode
   proto.Message.encode = function (message, writer) {
-    const w = messageEncode.call(this, message, writer)
     const st = message?.stickerMessage
-    if (st && audioBySticker.has(keyOf(st.fileSha256))) {
-      const inner = messageEncode.call(this, { stickerMessage: st }).finish()
-      const futureProof = lenField(1, inner)
-      w.uint32(tag(AUDIO_STICKER_MESSAGE_FIELD)).bytes(futureProof)
-    }
+    if (!st || !audioBySticker.has(keyOf(st.fileSha256))) return messageEncode.call(this, message, writer)
+    const rest = { ...message }
+    delete rest.stickerMessage
+    const w = messageEncode.call(this, rest, writer)
+    const inner = messageEncode.call(this, { stickerMessage: st }).finish()
+    w.uint32(tag(AUDIO_STICKER_MESSAGE_FIELD)).bytes(lenField(1, inner))
     return w
   }
 }

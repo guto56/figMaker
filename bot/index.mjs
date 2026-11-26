@@ -16,7 +16,7 @@ import { rmSync } from 'node:fs'
 import pino from 'pino'
 import qrcode from 'qrcode-terminal'
 import { inspectIncomingStickers } from './inspect.mjs'
-import { attachAudio, oggSeconds, patchStickerEncoder, waveform } from './sound-sticker.mjs'
+import { attachAudio, oggSeconds, patchStickerEncoder } from './sound-sticker.mjs'
 
 const API = (process.env.ZAPFIG_API || 'https://zapfig.hrycsngb42.workers.dev').replace(/\/$/, '')
 const TOKEN = process.env.BOT_TOKEN
@@ -67,11 +67,12 @@ async function sendSticker(sock, jid, job, quoted) {
   const media = await prepareWAMessageMedia({ sticker: job.webp, isAnimated: job.kind === 'animated' }, upload)
   media.stickerMessage.isAnimated = job.kind === 'animated'
   if (job.ogg) {
-    const { audioMessage } = await prepareWAMessageMedia({ audio: job.ogg, mimetype: 'audio/ogg; codecs=opus', ptt: true }, upload)
+    const { audioMessage } = await prepareWAMessageMedia({ audio: job.ogg, mimetype: 'audio/ogg; codecs=opus' }, upload)
+    // igual ao áudio de uma figurinha com som feita no app: sem ptt e sem waveform
     audioMessage.mimetype = 'audio/ogg; codecs=opus'
-    audioMessage.ptt = true
     audioMessage.seconds = oggSeconds(job.ogg)
-    audioMessage.waveform = waveform(job.ogg)
+    delete audioMessage.ptt
+    delete audioMessage.waveform
     attachAudio(media.stickerMessage, audioMessage)
   }
   const content = { stickerMessage: media.stickerMessage }
