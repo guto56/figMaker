@@ -12,16 +12,10 @@ const SESSION_MS = 10 * 60 * 1000
 const MAX_MEDIA = 25 * 1024 * 1024
 
 const MEME_SOUNDS = [
-  ['💥 Vine boom', 'vine boom'],
-  ['😂 Risada do Kiko', 'A risada do kiko'],
   ['😱 FAAAH', 'FAAAH'],
   ['😐 Bruh', 'bruh'],
-  ['🎻 Violino triste', 'violino triste'],
-  ['🦗 Grilo (silêncio)', 'grilo'],
-  ['💸 E o pix?', 'E o pix? Nada ainda?'],
-  ['👏 Aplausos', 'aplausos'],
-  ['📯 Trombone triste', 'trombone triste'],
-  ['🔔 Ding', 'ding sound effect'],
+  ['😂 Risada do Kiko', 'A risada do kiko'],
+  ['💥 Vine boom', 'vine boom'],
 ]
 const OPT = {
   keepBg: '🖼️ Manter a foto inteira',
@@ -152,7 +146,7 @@ export function createFlow({ sendSticker, log = console, fetchMedia = download }
     await sock.sendMessage(s.jid, { audio: await uniqueOgg(ogg).catch(() => ogg), mimetype: 'audio/ogg; codecs=opus', ptt: true })
     if (kind === 'mine') {
       s.stage = 'audio-confirm'
-      await ask(sock, s, 'Ouviu? Vai ficar assim na figurinha (até 6 s).', [OPT.ok, OPT.otherAudio, OPT.noSound])
+      await ask(sock, s, `Ouviu? Vai ficar assim na figurinha (até ${STICKER_AUDIO_MAX} s).`, [OPT.ok, OPT.otherAudio, OPT.noSound])
     } else {
       s.stage = 'meme-confirm'
       await ask(sock, s, `Som: ${title}. É esse?`, [OPT.thisOne, OPT.otherSound, OPT.noSound])
@@ -267,7 +261,7 @@ export function createFlow({ sendSticker, log = console, fetchMedia = download }
         if (a === OPT.noSound) return generate(sock, s)
         if (a === OPT.myAudio) {
           s.stage = 'audio-input'
-          return say(sock, jid, 'Pode mandar o áudio: grave segurando o 🎤, envie um arquivo de áudio ou mande um *vídeo* que eu uso o som dele. Uso até 6 segundos.')
+          return say(sock, jid, `Pode mandar o áudio: grave segurando o 🎤, envie um arquivo de áudio ou mande um *vídeo* que eu uso o som dele. Uso até ${STICKER_AUDIO_MAX} segundos.`)
         }
         return askMeme(sock, s)
 

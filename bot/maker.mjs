@@ -75,8 +75,8 @@ export async function makeSticker(o) {
 }
 
 /** Qualquer áudio (gravação do WhatsApp, arquivo, mp3 de meme) → OGG Opus mono 48 kHz, até 10 s. */
-// som de figurinha: as que tocaram tinham até ~5-6 s; com 10 s o WhatsApp não toca
-export const STICKER_AUDIO_MAX = Number(process.env.STICKER_AUDIO_MAX || 6)
+// duração máxima do som da figurinha (segundos)
+export const STICKER_AUDIO_MAX = Number(process.env.STICKER_AUDIO_MAX || 10)
 
 export async function toStickerAudio(data, ext = 'bin', maxSeconds = 10) {
   return withTmp(async (dir) => {
