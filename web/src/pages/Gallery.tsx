@@ -141,11 +141,16 @@ export default function Gallery() {
           {err && <p className="mt-4 text-accent" role="alert">{err}</p>}
 
           {list.length > 0 && (
-            <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+            <div className="fade-in mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
               {list.map((s) => <StickerTile key={s.id} sticker={s} onOpen={setOpen} />)}
             </div>
           )}
-          {loading && <p className="mt-8 text-muted">Carregando…</p>}
+          {loading && list.length === 0 && (
+            <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6" aria-hidden="true">
+              {Array.from({ length: 12 }, (_, i) => <div key={i} className="skeleton aspect-square rounded-xl2" />)}
+            </div>
+          )}
+          {loading && list.length > 0 && <p className="mt-8 text-muted">Carregando…</p>}
           {tab === 'comunidade' && next !== null && !loading && (
             <div className="mt-8 text-center"><button className="btn-soft" onClick={() => loadRemote(next)}>Ver mais</button></div>
           )}

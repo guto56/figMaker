@@ -63,7 +63,7 @@ export function Layout() {
           <div className="max-w-sm">
             <Logo />
             <p className="mt-3 text-muted">
-              Figurinhas para WhatsApp com som, feitas no seu navegador. Os arquivos que você usa ficam no seu aparelho.
+              Figurinhas para WhatsApp com som, feitas no seu navegador. Suas fotos e vídeos ficam no seu aparelho; só a figurinha pronta sai dele, quando você pede.
             </p>
           </div>
           <nav className="flex flex-wrap gap-x-2" aria-label="Rodapé">

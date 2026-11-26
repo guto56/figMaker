@@ -3,18 +3,18 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { AudioEditor, actx, fmt, type AudioClip } from '../components/AudioEditor'
 import { MemeSearch, type Picked } from '../components/MemeSearch'
 import { ReceiveWhatsApp } from '../components/ReceiveWhatsApp'
-import { getSticker, publishSticker, toSticker, type RemoteSticker } from '../lib/api'
+import { getSticker, publishSticker, sendConfig, toSticker, type RemoteSticker } from '../lib/api'
 import { SoundIcon, useSound, useUrl } from '../components/StickerTile'
 import { arrange, canvasToWebp, defaultLayout, hitTest, layerImg, loadImage, newLayer, renderStatic, textOverlay, type Arrange, type ImgLayer, type Layout } from '../lib/compose'
 import { LIMITS, getFFmpeg, mediaDuration, toAnimatedWebp, toOpus, toWav } from '../lib/ffmpeg'
 import { SEED } from '../lib/seed'
-import { asBlob, download, getMine, newId, saveSticker, shareSticker, slug, zipStickers, type Sticker } from '../lib/store'
+import { asBlob, download, getMine, newId, saveSticker, shareSticker, slug, type Sticker } from '../lib/store'
 
 type Tab = 'origem' | 'editar' | 'som' | 'baixar'
 type Video = { file: File | Blob; url: string; duration: number; start: number; length: number; fit: 'crop' | 'fit'; speed: number }
 type Result = { webp: Blob; ogg: Blob | null; kind: 'static' | 'animated' }
 
-const TABS: Array<[Tab, string]> = [['origem', 'Origem'], ['editar', 'Editar'], ['som', 'Som'], ['baixar', 'Baixar']]
+const TABS: Array<[Tab, string]> = [['origem', 'Escolher'], ['editar', 'Editar'], ['som', 'Som'], ['baixar', 'Pronto']]
 
 export default function Maker() {
   const [params] = useSearchParams()
@@ -35,6 +35,10 @@ export default function Maker() {
   const [showMemes, setShowMemes] = useState(false)
   const [published, setPublished] = useState<RemoteSticker | null>(null)
   const [publishing, setPublishing] = useState(false)
+  const [sendOn, setSendOn] = useState(true)
+  useEffect(() => {
+    sendConfig().then(setSendOn)
+  }, [])
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const overlayRef = useRef<HTMLCanvasElement>(null)
   const vidRef = useRef<HTMLVideoElement>(null)
@@ -453,7 +457,7 @@ export default function Maker() {
           )}
           {err && <p className="mt-4 rounded-xl bg-paper px-4 py-3 text-accent ring-1 ring-line" role="alert">{err}</p>}
 
-          <div className="mt-6">
+          <div className="fade-in mt-6" key={tab}>
             {tab === 'origem' && (
               <div className="grid gap-6">
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -596,8 +600,8 @@ export default function Maker() {
                   </div>
                 </section>
                 <div className="flex flex-wrap gap-2">
-                  <button className="btn-main" onClick={() => setTab('som')}>Próximo: som</button>
-                  <button className="btn-soft" onClick={generate}>Gerar sem som</button>
+                  <button className="btn-main h-12 px-6 text-base" onClick={() => setTab('som')}>Próximo: colocar som</button>
+                  <button className="btn-soft h-12 px-6" onClick={generate}>Pronto, gerar sem som</button>
                 </div>
               </div>
             )}
@@ -607,7 +611,7 @@ export default function Maker() {
                 <section className="panel p-5" aria-label="Som">
                   <AudioEditor clip={audio} onChange={setAudio} videoFile={mode === 'video' && video && !video.file.type.includes('gif') ? video.file : null} videoStart={video?.start} setBusy={setBusy} />
                 </section>
-                <button className="btn-main justify-self-start" onClick={generate} disabled={!!busy}>Gerar figurinha</button>
+                <button className="btn-main h-12 justify-self-start px-6 text-base" onClick={generate} disabled={!!busy}>Gerar figurinha</button>
               </div>
             )}
 
@@ -621,80 +625,85 @@ export default function Maker() {
                 )}
                 {result && (
                   <>
-                    <section className="panel grid gap-5 p-5 sm:grid-cols-[180px_1fr]" aria-label="Resultado">
+                    <section className="panel pop-in grid gap-5 p-5 sm:grid-cols-[200px_1fr] sm:items-center" aria-label="Resultado">
                       <div className="checker aspect-square overflow-hidden rounded-xl ring-1 ring-line">
-                        {resUrl && <img src={resUrl} alt="Figurinha gerada" className={`h-full w-full object-contain ${playing ? 'playing' : ''}`} />}
+                        {resUrl && <img src={resUrl} alt="Figurinha gerada" className={`sticker-land h-full w-full object-contain ${playing ? 'playing' : ''}`} />}
                       </div>
                       <div className="grid content-start gap-3">
-                        <div>
-                          <div className="flex items-center justify-between text-sm">
-                            <span>Tamanho da imagem</span>
-                            <span className="mono">{kb.toFixed(0)} de {limitKB} KB</span>
-                          </div>
-                          <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-surface">
-                            <div className={`h-full rounded-full ${kb <= limitKB ? 'bg-ink' : 'bg-accent'}`} style={{ width: `${Math.min(100, (kb / limitKB) * 100)}%` }} />
-                          </div>
-                          <p className={`mt-2 text-sm ${kb <= limitKB ? 'text-muted' : 'text-accent'}`}>
-                            {kb <= limitKB ? 'Dentro do limite do WhatsApp.' : 'Passou do limite. Diminua a duração ou use Cortar quadrado.'}
+                        <h2 className="text-3xl">Sua figurinha está pronta</h2>
+                        {kb <= limitKB ? (
+                          <p className="text-muted">
+                            {result.kind === 'animated' ? 'Animada' : 'Figurinha'}
+                            {result.ogg ? ` com ${fmt(audio?.length ?? 0)} de som` : ''}, no tamanho certo para o WhatsApp.
                           </p>
-                        </div>
-                        <p className="mono text-muted">
-                          WebP {result.kind === 'animated' ? 'animada' : 'estática'} 512 × 512
-                          {result.ogg ? `, som Opus ${fmt(audio?.length ?? 0)} (${Math.round(result.ogg.size / 1024)} KB)` : ', sem som'}
-                        </p>
+                        ) : (
+                          <p className="text-accent">Ficou grande demais para o WhatsApp. Volte em Editar e diminua a duração ou use Cortar quadrado.</p>
+                        )}
                         {sndUrl && <button className="btn-soft justify-self-start" onClick={play} aria-pressed={playing}><SoundIcon /> {playing ? 'Parar o som' : 'Ouvir o som'}</button>}
                       </div>
                     </section>
 
-                    <ReceiveWhatsApp kind={result.kind} getFiles={async () => ({ webp: result.webp, ogg: result.ogg })} />
-                    <section className="panel grid gap-4 p-5" aria-label="Baixar">
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <label className="grid gap-1"><span className="label">Nome</span>
-                          <input className="field" value={name} onChange={(e) => setName(e.target.value)} placeholder="Gato julgando" maxLength={40} /></label>
-                        <label className="grid gap-1"><span className="label">Palavras para busca, separadas por vírgula</span>
-                          <input className="field" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="gato, bravo, julgando" /></label>
-                      </div>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <button className="btn-main" onClick={async () => { const s = sticker(); if (s) download(await zipStickers([s]), `${slug(s.name)}.zip`) }}>
-                          Baixar figurinha (.zip)
-                        </button>
-                        <button className="btn-soft" onClick={async () => {
-                          const s = sticker()
-                          if (s && !(await shareSticker(s))) setErr('Este navegador não compartilha arquivos. Baixe e envie pelo WhatsApp.')
-                        }}>Compartilhar no celular</button>
-                        <button className="btn-soft" onClick={() => download(result.webp, `${slug(name || 'figurinha')}.webp`)}>Só a imagem (.webp)</button>
-                        {result.ogg && <button className="btn-soft" onClick={() => download(result.ogg!, `${slug(name || 'figurinha')}.ogg`)}>Só o som (.ogg)</button>}
-                        <button className="btn-soft" onClick={async () => {
-                          const s = sticker()
-                          if (!s) return
-                          await saveSticker(s)
-                          setSaved(s.id)
-                        }} disabled={!!saved}>{saved ? 'Salva em Minhas figurinhas' : 'Salvar em Minhas figurinhas'}</button>
-                        <button className="btn-soft" disabled={publishing || !!published} onClick={async () => {
-                          const s = sticker()
-                          if (!s || !result) return
-                          setPublishing(true)
-                          setErr('')
-                          try {
-                            const r = await publishSticker({ name: s.name, tags: s.tags, kind: s.kind, webp: result.webp, ogg: result.ogg })
-                            setPublished(r)
-                            await saveSticker({ ...s, remoteId: r.id })
+                    <ReceiveWhatsApp kind={result.kind} hasSound={!!result.ogg} getFiles={async () => ({ webp: result.webp, ogg: result.ogg })} />
+
+                    <details className="panel group p-5" open={!sendOn}>
+                      <summary className="flex min-h-8 cursor-pointer list-none items-center justify-between gap-4 text-lg">
+                        Baixar, salvar ou publicar
+                        <span className="text-muted transition group-open:rotate-45" aria-hidden="true">+</span>
+                      </summary>
+                      <div className="mt-4 grid gap-4">
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <button className="btn-main" onClick={() => download(result.webp, `${slug(name || 'figurinha')}.webp`)}>Baixar figurinha</button>
+                          {result.ogg ? (
+                            <button className="btn-soft" onClick={() => download(result.ogg!, `${slug(name || 'figurinha')}.ogg`)}>Baixar o som</button>
+                          ) : (
+                            <button className="btn-soft" onClick={async () => {
+                              const s = sticker()
+                              if (s && !(await shareSticker(s))) setErr('Este navegador não compartilha arquivos. Use Baixar figurinha.')
+                            }}>Compartilhar</button>
+                          )}
+                        </div>
+                        {result.ogg && (
+                          <p className="text-sm text-muted">O WhatsApp ainda não abre a figurinha com som a partir de um arquivo baixado. Para receber com som, use o botão verde.</p>
+                        )}
+                        <div className="grid gap-3 border-t border-line pt-4 sm:grid-cols-2">
+                          <label className="grid gap-1"><span className="label">Nome (para achar depois)</span>
+                            <input className="field" value={name} onChange={(e) => setName(e.target.value)} placeholder="Gato julgando" maxLength={40} /></label>
+                          <label className="grid gap-1"><span className="label">Palavras para a busca, separadas por vírgula</span>
+                            <input className="field" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="gato, bravo, julgando" /></label>
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <button className="btn-soft" onClick={async () => {
+                            const s = sticker()
+                            if (!s) return
+                            await saveSticker(s)
                             setSaved(s.id)
-                          } catch (e) {
-                            setErr((e as Error).message)
-                          } finally {
-                            setPublishing(false)
-                          }
-                        }}>{published ? 'Publicada na galeria' : publishing ? 'Publicando…' : 'Publicar na galeria'}</button>
+                          }} disabled={!!saved}>{saved ? 'Salva neste aparelho' : 'Salvar em Minhas figurinhas'}</button>
+                          <button className="btn-soft" disabled={publishing || !!published} onClick={async () => {
+                            const s = sticker()
+                            if (!s || !result) return
+                            setPublishing(true)
+                            setErr('')
+                            try {
+                              const r = await publishSticker({ name: s.name, tags: s.tags, kind: s.kind, webp: result.webp, ogg: result.ogg })
+                              setPublished(r)
+                              await saveSticker({ ...s, remoteId: r.id })
+                              setSaved(s.id)
+                            } catch (e) {
+                              setErr((e as Error).message)
+                            } finally {
+                              setPublishing(false)
+                            }
+                          }}>{published ? 'Publicada na galeria' : publishing ? 'Publicando…' : 'Publicar na galeria'}</button>
+                        </div>
+                        {saved && <p className="text-sm text-muted" role="status">Guardada neste aparelho. <Link className="text-ink underline underline-offset-4" to="/galeria?aba=minhas">Ver minhas figurinhas</Link></p>}
+                        {published && (
+                          <p className="text-sm text-muted" role="status">
+                            Publicada. Link para compartilhar: <Link className="break-all text-ink underline underline-offset-4" to={`/f/${published.id}`}>{location.host}/f/{published.id}</Link>
+                          </p>
+                        )}
                       </div>
-                      {published && (
-                        <p className="text-sm text-muted" role="status">
-                          Publicada. Link para compartilhar: <Link className="break-all text-ink underline underline-offset-4" to={`/f/${published.id}`}>{location.host}/f/{published.id}</Link>
-                        </p>
-                      )}
-                      {saved && <p className="text-sm text-muted" role="status">Guardada neste navegador. <Link className="text-ink underline underline-offset-4" to="/galeria?aba=minhas">Ver minhas figurinhas</Link></p>}
-                      <p className="text-sm text-muted">Depois de baixar, veja <Link className="text-ink underline underline-offset-4" to="/como-usar">como pôr no WhatsApp</Link>.</p>
-                    </section>
+                    </details>
+                    <p className="text-center text-sm text-muted">Dúvidas? Veja <Link className="text-ink underline underline-offset-4" to="/como-usar">como usar</Link>.</p>
                     <button className="btn-ghost justify-self-start" onClick={reset}>
                       Começar outra figurinha
                     </button>

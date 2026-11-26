@@ -113,7 +113,12 @@ export function SoundLibrary({ onUse }: { onUse: (blob: Blob, title: string) => 
             </li>
           ))}
         </ul>
-        {loading && <p className="bg-paper py-4 text-center text-muted">Carregando…</p>}
+        {loading && items.length === 0 && (
+          <ul className="grid gap-2 bg-paper p-2" aria-hidden="true">
+            {Array.from({ length: 5 }, (_, i) => <li key={i} className="skeleton h-11 rounded-lg" />)}
+          </ul>
+        )}
+        {loading && items.length > 0 && <p className="bg-paper py-4 text-center text-muted">Carregando…</p>}
         {!loading && items.length === 0 && !err && <p className="bg-paper py-4 text-center text-muted">Nenhum som encontrado.</p>}
         {next && !loading && (
           <div className="bg-paper py-3 text-center">

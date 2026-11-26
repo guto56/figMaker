@@ -39,10 +39,10 @@ const kinds = [
 ]
 
 const steps = [
-  { t: 'Escolha a origem', d: 'Foto, print, GIF, vídeo ou um modelo de meme da busca.' },
-  { t: 'Ajuste no quadro de 512 px', d: 'Arraste, aumente, gire, tire o fundo e escreva o texto.' },
-  { t: 'Coloque o som', d: 'Corte o trecho na onda do áudio, até 10 segundos.' },
-  { t: 'Baixe e mande', d: 'WebP e OGG prontos, ou compartilhe direto do celular.' },
+  { t: 'Escolha a origem', d: 'Foto, print, GIF, vídeo ou um meme da busca.' },
+  { t: 'Ajuste do seu jeito', d: 'Junte várias fotos, tire o fundo e escreva o texto.' },
+  { t: 'Coloque o som', d: 'Grave, envie um áudio ou escolha um som de meme.' },
+  { t: 'Receba no WhatsApp', d: 'Um toque no botão verde e ela chega no seu WhatsApp, com som.' },
 ]
 
 export default function Home() {
@@ -57,7 +57,7 @@ export default function Home() {
             Figurinhas para WhatsApp com som, feitas no navegador
           </h1>
           <p className="mt-6 max-w-lg text-lg text-muted">
-            Monte a figurinha a partir de uma foto, GIF ou vídeo, coloque até 10 segundos de áudio e baixe no formato que o WhatsApp aceita. Grátis e sem cadastro.
+            Monte a figurinha a partir de uma foto, GIF ou vídeo, coloque até 10 segundos de áudio e receba no seu WhatsApp com um toque. Grátis e sem cadastro.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link to="/criar" className="btn-main h-12 px-6 text-base">Criar figurinha</Link>
@@ -90,11 +90,14 @@ export default function Home() {
       <section className="border-y border-line bg-paper py-20" aria-labelledby="passos">
         <div className="wrap grid gap-12 lg:grid-cols-[0.9fr_1.1fr]">
           <div>
-            <h2 id="passos" className="text-[clamp(2rem,4vw,3.25rem)] leading-[1.02]">Do arquivo ao WhatsApp em quatro passos</h2>
+            <h2 id="passos" className="text-[clamp(2rem,4vw,3.25rem)] leading-[1.02]">Da foto ao seu WhatsApp em quatro passos</h2>
             <p className="mt-5 max-w-md text-muted">
-              Tudo roda no seu navegador, no celular ou no computador, inclusive no Mac. Nenhum vídeo ou áudio seu é enviado para um servidor.
+              Funciona no navegador do celular ou do computador, inclusive no Mac. A figurinha chega numa conversa do WhatsApp e é só favoritar.
             </p>
-            <Link to="/criar" className="btn-main mt-8">Criar figurinha</Link>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link to="/criar" className="btn-main">Criar figurinha</Link>
+              <Link to="/como-usar" className="btn-soft">Ver como usar</Link>
+            </div>
           </div>
           <ol className="grid gap-px overflow-hidden rounded-xl2 bg-line ring-1 ring-line sm:grid-cols-2">
             {steps.map((s, i) => (

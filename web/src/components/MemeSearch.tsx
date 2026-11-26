@@ -117,7 +117,12 @@ export function MemeSearch({ onPick }: { onPick: (p: Picked) => void }) {
             </li>
           ))}
         </ul>
-        {loading && <p className="py-4 text-center text-muted">Carregando…</p>}
+        {loading && shown.length === 0 && (
+          <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4" aria-hidden="true">
+            {Array.from({ length: 8 }, (_, i) => <li key={i} className="skeleton aspect-square rounded-xl" />)}
+          </ul>
+        )}
+        {loading && shown.length > 0 && <p className="py-4 text-center text-muted">Carregando…</p>}
         {!loading && shown.length === 0 && !err && <p className="py-4 text-center text-muted">Nada encontrado. Tente outra palavra.</p>}
         {next && !loading && src !== 'memes' && (
           <div className="py-3 text-center">
