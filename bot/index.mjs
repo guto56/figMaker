@@ -45,6 +45,7 @@ function allowed(jid) {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const handled = new Set()
 
 async function api(path, init = {}) {
   const r = await fetch(`${API}${path}`, { ...init, headers: { authorization: `Bearer ${TOKEN}`, ...(init.headers || {}) } })
@@ -153,8 +154,16 @@ async function start() {
   })
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    if (type !== 'notify') return
-    for (const m of messages) handle(sock, m).catch((e) => console.error(e?.message))
+    for (const m of messages) {
+      // mensagens que chegaram com o robô desligado vêm como 'append': responde se forem recentes
+      if (type !== 'notify') {
+        const ts = Number(m.messageTimestamp || 0) * 1000
+        if (!ts || Date.now() - ts > 30 * 60 * 1000) continue
+      }
+      if (handled.has(m.key.id)) continue
+      handled.add(m.key.id)
+      handle(sock, m).catch((e) => console.error(e?.message))
+    }
   })
 }
 
