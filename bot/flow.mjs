@@ -151,6 +151,7 @@ export function createFlow({ sendSticker, log = console, fetchMedia = download }
 
   async function previewAndConfirm(sock, s, ogg, title, kind) {
     s.audio = ogg
+    log.log?.(`prévia de som (${kind}, ${ogg.length} bytes)`)
     await sock.sendMessage(s.jid, { audio: ogg, mimetype: 'audio/ogg; codecs=opus', ptt: true })
     if (kind === 'mine') {
       s.stage = 'audio-confirm'
@@ -171,6 +172,7 @@ export function createFlow({ sendSticker, log = console, fetchMedia = download }
       try {
         const st = await makeSticker({ data: s.media.data, kind: s.media.type, ext: s.media.ext, text: s.text, textPosition: s.textPosition })
         await sendSticker(sock, jid, { webp: st.webp, kind: st.kind, ogg: s.audio || null }, undefined)
+        log.log?.(`conversa: figurinha enviada (${st.kind}${s.audio ? `, com som ${s.audio.length} bytes` : ', sem som'})`)
         consume(s.user)
         const left = remaining(s.user)
         await say(sock, jid,
