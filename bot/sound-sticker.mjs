@@ -1,26 +1,53 @@
-// Figurinha com som: o WhatsApp guarda o áudio dentro da própria figurinha
-// (StickerMessage, campo 26 = AudioMessage). O Baileys ainda não conhece esse
-// campo, então o codificador é estendido aqui: depois de codificar a figurinha,
-// os bytes do áudio são acrescentados como campo 26.
+// Figurinha com som. O WhatsApp guarda o áudio dentro da própria figurinha
+// (StickerMessage, campo 26 = AudioMessage) e, nas versões novas, embrulha a
+// figurinha em Message.audioStickerMessage (campo 134, um FutureProofMessage
+// cujo campo 1 é a Message com a figurinha). Versões antigas leem só a
+// figurinha; as novas leem o embrulho e tocam o som. O Baileys ainda não conhece
+// nenhum dos dois campos, então os codificadores são estendidos aqui.
 import { proto } from '@whiskeysockets/baileys'
 
-const FIELD = 26
-const TAG = (FIELD << 3) | 2 // tipo 2 = bytes com tamanho
+const STICKER_AUDIO_FIELD = 26
+const AUDIO_STICKER_MESSAGE_FIELD = 134
+const tag = (field) => (field << 3) | 2 // tipo 2 = bytes com tamanho
 
 // figurinhas que levam som, pela impressão digital do arquivo (fileSha256 em base64)
 const audioBySticker = new Map()
+const keyOf = (sha) => (sha && sha.length ? Buffer.from(sha).toString('base64') : '')
+
+function varint(n) {
+  const out = []
+  while (n > 127) {
+    out.push((n & 127) | 128)
+    n >>>= 7
+  }
+  out.push(n)
+  return Buffer.from(out)
+}
+const lenField = (field, bytes) => Buffer.concat([varint(tag(field)), varint(bytes.length), Buffer.from(bytes)])
 
 let patched = false
 export function patchStickerEncoder() {
   if (patched) return
   patched = true
-  const original = proto.Message.StickerMessage.encode
+
+  // 1) áudio dentro da figurinha (campo 26)
+  const stickerEncode = proto.Message.StickerMessage.encode
   proto.Message.StickerMessage.encode = function (message, writer) {
-    const w = original.call(this, message, writer)
-    const sha = message?.fileSha256
-    if (sha && sha.length) {
-      const audio = audioBySticker.get(Buffer.from(sha).toString('base64'))
-      if (audio) w.uint32(TAG).bytes(audio)
+    const w = stickerEncode.call(this, message, writer)
+    const audio = audioBySticker.get(keyOf(message?.fileSha256))
+    if (audio) w.uint32(tag(STICKER_AUDIO_FIELD)).bytes(audio)
+    return w
+  }
+
+  // 2) embrulho audioStickerMessage (campo 134) ao lado da figurinha
+  const messageEncode = proto.Message.encode
+  proto.Message.encode = function (message, writer) {
+    const w = messageEncode.call(this, message, writer)
+    const st = message?.stickerMessage
+    if (st && audioBySticker.has(keyOf(st.fileSha256))) {
+      const inner = messageEncode.call(this, { stickerMessage: st }).finish()
+      const futureProof = lenField(1, inner)
+      w.uint32(tag(AUDIO_STICKER_MESSAGE_FIELD)).bytes(futureProof)
     }
     return w
   }
@@ -28,7 +55,7 @@ export function patchStickerEncoder() {
 
 /** Liga o áudio (AudioMessage já enviado ao servidor) à figurinha. */
 export function attachAudio(stickerMessage, audioMessage) {
-  const key = Buffer.from(stickerMessage.fileSha256).toString('base64')
+  const key = keyOf(stickerMessage.fileSha256)
   const bytes = proto.Message.AudioMessage.encode(audioMessage).finish()
   audioBySticker.set(key, bytes)
   // a figurinha pode ser reenviada (novas tentativas, outros aparelhos); limpa depois

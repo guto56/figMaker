@@ -11,6 +11,7 @@ import {
   prepareWAMessageMedia,
   useMultiFileAuthState,
 } from '@whiskeysockets/baileys'
+import { randomBytes } from 'node:crypto'
 import { rmSync } from 'node:fs'
 import pino from 'pino'
 import qrcode from 'qrcode-terminal'
@@ -71,7 +72,10 @@ async function sendSticker(sock, jid, job, quoted) {
     audioMessage.waveform = waveform(job.ogg)
     attachAudio(media.stickerMessage, audioMessage)
   }
-  const msg = generateWAMessageFromContent(jid, { stickerMessage: media.stickerMessage }, { userJid: sock.user?.id, quoted })
+  const content = { stickerMessage: media.stickerMessage }
+  // o WhatsApp usa um segredo por mensagem em figurinhas com som
+  if (job.ogg) content.messageContextInfo = { messageSecret: randomBytes(32) }
+  const msg = generateWAMessageFromContent(jid, content, { userJid: sock.user?.id, quoted })
   await sock.relayMessage(jid, msg.message, { messageId: msg.key.id })
 }
 
