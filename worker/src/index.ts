@@ -27,6 +27,7 @@ export interface Env {
   FREESOUND_KEY: string
   IP_SALT: string
   BOT_TOKEN: string
+  NTFY_TOPIC: string
   WA_NUMBER: string
 }
 
@@ -562,6 +563,49 @@ async function botRoute(req: Request, env: Env, code: string, part?: string) {
   return err('Método não permitido.', 405)
 }
 
+/* ---------------- saúde do robô ---------------- */
+// O robô manda um "estou vivo" a cada minuto; um cron confere a cada 5 minutos e avisa o dono
+// (notificação no app ntfy) quando ele cai e quando volta.
+type Heartbeat = { at: number; connected: boolean; since: number }
+type AlertState = { down: boolean; at: number; reason?: string }
+
+async function heartbeat(req: Request, env: Env) {
+  const auth = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
+  if (!env.BOT_TOKEN || !auth || !(await sameHash(await sha(auth), await sha(env.BOT_TOKEN)))) return err('Não autorizado.', 401)
+  const body = (await req.json().catch(() => ({}))) as { connected?: boolean }
+  const prev = await env.FILES.get<Heartbeat>('bot:hb', 'json')
+  const connected = !!body.connected
+  const hb: Heartbeat = { at: Date.now(), connected, since: prev && prev.connected === connected ? prev.since : Date.now() }
+  await env.FILES.put('bot:hb', JSON.stringify(hb))
+  return json({ ok: true })
+}
+
+async function notify(env: Env, title: string, message: string, priority: 'high' | 'default') {
+  if (!env.NTFY_TOPIC) return
+  await fetch(`https://ntfy.sh/${env.NTFY_TOPIC}`, {
+    method: 'POST',
+    body: message,
+    headers: { Title: title, Priority: priority, Tags: priority === 'high' ? 'rotating_light' : 'white_check_mark' },
+  }).catch((e) => console.error('ntfy', e))
+}
+
+async function checkBot(env: Env) {
+  const hb = await env.FILES.get<Heartbeat>('bot:hb', 'json')
+  const st = (await env.FILES.get<AlertState>('bot:alert', 'json')) ?? { down: false, at: 0 }
+  const now = Date.now()
+  let reason = ''
+  if (!hb) return
+  if (now - hb.at > 10 * 60 * 1000) reason = `O robô não dá sinal há ${Math.round((now - hb.at) / 60000)} min. A máquina da Oracle pode ter parado.`
+  else if (!hb.connected && now - hb.since > 5 * 60 * 1000) reason = `O robô está ligado, mas desconectado do WhatsApp há ${Math.round((now - hb.since) / 60000)} min. Pode precisar conectar o número de novo.`
+  if (reason && !st.down) {
+    await notify(env, 'Zapfig: robô fora do ar', reason, 'high')
+    await env.FILES.put('bot:alert', JSON.stringify({ down: true, at: now, reason }))
+  } else if (!reason && st.down) {
+    await notify(env, 'Zapfig: robô voltou', `O robô voltou depois de ${Math.round((now - st.at) / 60000)} min fora.`, 'default')
+    await env.FILES.put('bot:alert', JSON.stringify({ down: false, at: now }))
+  }
+}
+
 /* ---------------- roteamento ---------------- */
 function crossSite(req: Request, url: URL) {
   const origin = req.headers.get('origin')
@@ -590,6 +634,7 @@ async function route(req: Request, env: Env, url: URL): Promise<Response> {
   if (p === '/api/sounds/freesound') return await freesound(env, url)
   if (p === '/api/proxy' || p === '/api/img') return await proxy(url)
   if (p.startsWith('/api/f/')) return await file(env, p.slice(7))
+  if (p === '/api/bot/heartbeat' && method === 'POST') return await heartbeat(req, env)
   if (p === '/api/send/config') return json({ enabled: !!(waNumber(env) && env.BOT_TOKEN), number: waNumber(env) || null }, 200, { 'cache-control': 'public, max-age=60' })
   if (p === '/api/send' && method === 'POST') return await createSend(req, env)
   const b = p.match(/^\/api\/bot\/send\/([^/]+)(?:\/(webp|ogg|done))?$/)
@@ -604,6 +649,9 @@ async function route(req: Request, env: Env, url: URL): Promise<Response> {
 }
 
 export default {
+  async scheduled(_ev: ScheduledController, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(checkBot(env))
+  },
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url)
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(req)

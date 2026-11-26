@@ -4,3 +4,4 @@ auth/
 *.log
 dumps/
 data/
+models/*.onnx

@@ -3,6 +3,7 @@
 // As escolhas são feitas tocando em enquetes; responder com o número ou o texto da opção também vale.
 import { downloadMediaMessage, jidNormalizedUser } from '@whiskeysockets/baileys'
 import { DAILY_LIMIT, consume, remaining } from './limits.mjs'
+import { cutoutAvailable, removeBackground } from './cutout.mjs'
 import { makeSticker, toStickerAudio } from './maker.mjs'
 import { readVote, sendPoll } from './polls.mjs'
 
@@ -25,6 +26,8 @@ const MEME_SOUNDS = [
   ['🔔 Ding', 'ding sound effect'],
 ]
 const OPT = {
+  keepBg: '🖼️ Manter a foto inteira',
+  cutBg: '✂️ Tirar o fundo',
   textBottom: '✍️ Texto embaixo',
   textTop: '✍️ Texto em cima',
   noText: '➡️ Sem texto',
@@ -162,7 +165,7 @@ export function createFlow({ sendSticker, log = console, fetchMedia = download }
         const left = remaining(s.user)
         await say(sock, jid,
           `Pronto! Toque e segure na figurinha e escolha *Favoritar* para guardar.${s.audio ? ' Toque nela para ouvir o som.' : ''}\n\n` +
-          (left > 0 ? `Hoje você ainda pode fazer ${left}. É só mandar outra foto ou vídeo.` : `Essas foram as ${DAILY_LIMIT} de hoje. Amanhã tem mais! Pelo site dá para criar à vontade: ${SITE}`))
+          (left === Infinity ? 'Quer outra? É só mandar mais uma foto ou vídeo.' : left > 0 ? `Hoje você ainda pode fazer ${left}. É só mandar outra foto ou vídeo.` : `Essas foram as ${DAILY_LIMIT} de hoje. Amanhã tem mais! Pelo site dá para criar à vontade: ${SITE}`))
       } catch (e) {
         log.error?.('falha ao gerar', e?.message)
         await say(sock, jid, 'Não consegui fazer essa figurinha. Tente com outra foto ou um vídeo mais curto.')
@@ -197,8 +200,17 @@ export function createFlow({ sendSticker, log = console, fetchMedia = download }
       await say(sock, jid, 'Não consegui baixar esse arquivo. Pode mandar de novo?', m)
       return
     }
+    if (s.media.type === 'image' && cutoutAvailable()) {
+      s.stage = 'bg-choice'
+      await ask(sock, s, 'Bora fazer a figurinha! Quer tirar o fundo da foto?', [OPT.keepBg, OPT.cutBg])
+      return
+    }
+    await askText(sock, s, 'Bora fazer a figurinha! Quer escrever um texto nela?')
+  }
+
+  async function askText(sock, s, question = 'Quer escrever um texto na figurinha?') {
     s.stage = 'text-choice'
-    await ask(sock, s, 'Bora fazer a figurinha! Quer escrever um texto nela?', [OPT.noText, OPT.textBottom, OPT.textTop])
+    await ask(sock, s, question, [OPT.noText, OPT.textBottom, OPT.textTop])
   }
 
   async function step(sock, s, m, vote) {
@@ -207,6 +219,26 @@ export function createFlow({ sendSticker, log = console, fetchMedia = download }
     const a = answerFrom(s, m, vote)
 
     switch (s.stage) {
+      case 'bg-choice': {
+        if (!a) return
+        if (a === OPT.cutBg) {
+          s.stage = 'cutting'
+          await say(sock, jid, 'Recortando… isso leva alguns segundos.')
+          const job = queue.then(async () => {
+            try {
+              s.media = { ...s.media, data: await removeBackground(s.media.data), ext: 'png' }
+              await sock.sendMessage(jid, { image: s.media.data, caption: 'Ficou assim.' }).catch(() => {})
+            } catch (e) {
+              log.error?.('recorte', e?.message)
+              await say(sock, jid, 'Não consegui tirar o fundo dessa foto. Vou usar a foto inteira.')
+            }
+          })
+          queue = job.catch(() => {})
+          await job
+        }
+        return askText(sock, s)
+      }
+
       case 'text-choice':
         if (!a) return
         if (a === OPT.noText) return askSound(sock, s)
@@ -325,7 +357,7 @@ export function createFlow({ sendSticker, log = console, fetchMedia = download }
     const vote = readVote(sock, m)
     const s = sessions.get(user)
     if (vote) {
-      if (s && s.stage !== 'generating') await safeStep(sock, s, m, vote)
+      if (s && !['generating', 'cutting'].includes(s.stage)) await safeStep(sock, s, m, vote)
       return true
     }
     const c = unwrap(m.message)
@@ -335,7 +367,7 @@ export function createFlow({ sendSticker, log = console, fetchMedia = download }
       await startWithMedia(sock, m, user, jid, media)
       return true
     }
-    if (s && s.stage !== 'generating') {
+    if (s && !['generating', 'cutting'].includes(s.stage)) {
       if (['cancelar', 'sair', 'parar'].includes(norm(textOf(m)))) {
         end(s)
         await say(sock, jid, 'Cancelei. Quando quiser, é só mandar uma foto ou vídeo.')

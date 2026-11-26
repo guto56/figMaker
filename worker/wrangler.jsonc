@@ -5,6 +5,10 @@
   "compatibility_date": "2026-11-01",
   "account_id": "762fe93850d238b22cac17ead40753c7",
   "workers_dev": true,
+  "routes": [
+    { "pattern": "zapfig.site", "custom_domain": true },
+    { "pattern": "www.zapfig.site", "custom_domain": true }
+  ],
   "assets": {
     "directory": "../web/dist",
     "binding": "ASSETS",
@@ -18,6 +22,7 @@
     { "name": "PROXY_LIMIT", "namespace_id": "1003", "simple": { "limit": 600, "period": 60 } }
   ],
   "preview_urls": false,
+  "triggers": { "crons": ["*/5 * * * *"] },
   "vars": { "WA_NUMBER": "5565992463819" },
   "durable_objects": { "bindings": [{ "name": "LIMITER", "class_name": "Limiter" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Limiter"] }],

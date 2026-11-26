@@ -40,6 +40,10 @@ else
 fi
 cd "$DIR/bot"
 npm ci --omit=dev
+# modelos para tirar o fundo da foto (rembg): silueta (melhor) e u2netp (reserva, mais leve)
+mkdir -p models
+[ -s models/silueta.onnx ] || curl -fsSL -o models/silueta.onnx https://github.com/danielgatis/rembg/releases/download/v0.0.0/silueta.onnx || true
+[ -s models/u2netp.onnx ] || curl -fsSL -o models/u2netp.onnx https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2netp.onnx || true
 umask 077
 cat > .env <<EOF
 ZAPFIG_API=https://zapfig.hrycsngb42.workers.dev

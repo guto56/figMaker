@@ -46,6 +46,13 @@ function allowed(jid) {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+// sinal de vida para o site (alerta ao dono se o robô cair)
+let connected = false
+async function heartbeat() {
+  await api('/api/bot/heartbeat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ connected }) }).catch(() => {})
+}
+setInterval(heartbeat, 60_000).unref?.()
 const handled = new Set()
 
 async function api(path, init = {}) {
@@ -146,8 +153,13 @@ async function start() {
         qrcode.generate(qr, { small: true })
       }
     }
-    if (connection === 'open') console.log(`Robô conectado como ${sock.user?.id}. Esperando pedidos…`)
+    if (connection === 'open') {
+      connected = true
+      heartbeat()
+      console.log(`Robô conectado como ${sock.user?.id}. Esperando pedidos…`)
+    }
     if (connection === 'close') {
+      connected = false
       const status = lastDisconnect?.error?.output?.statusCode
       if (status === DisconnectReason.loggedOut) {
         // sessão inválida (pareamento falhou ou o aparelho foi removido no celular): começa do zero
