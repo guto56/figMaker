@@ -11,6 +11,7 @@ import {
   prepareWAMessageMedia,
   useMultiFileAuthState,
 } from '@whiskeysockets/baileys'
+import { rmSync } from 'node:fs'
 import pino from 'pino'
 import qrcode from 'qrcode-terminal'
 import { attachAudio, oggSeconds, patchStickerEncoder, waveform } from './sound-sticker.mjs'
@@ -109,7 +110,8 @@ async function start() {
     version,
     auth: state,
     logger: log,
-    browser: Browsers.macOS('Zapfig'),
+    // o pareamento por código só aceita um navegador conhecido
+    browser: Browsers.macOS('Chrome'),
     markOnlineOnConnect: false,
     syncFullHistory: false,
   })
@@ -120,6 +122,7 @@ async function start() {
     if (qr) {
       if (PAIR_NUMBER && !pairingAsked) {
         pairingAsked = true
+        await sleep(2000)
         const code = await sock.requestPairingCode(PAIR_NUMBER)
         console.log(`\nNo celular do número ${PAIR_NUMBER}: WhatsApp > Aparelhos conectados > Conectar com número de telefone > digite: ${code}\n`)
       } else if (!PAIR_NUMBER) {
@@ -131,8 +134,11 @@ async function start() {
     if (connection === 'close') {
       const status = lastDisconnect?.error?.output?.statusCode
       if (status === DisconnectReason.loggedOut) {
-        console.error('Sessão encerrada no celular. Apague a pasta auth e conecte de novo.')
-        process.exit(1)
+        // sessão inválida (pareamento falhou ou o aparelho foi removido no celular): começa do zero
+        console.error('Sessão encerrada. Apagando a sessão e gerando um código novo em 5 s…')
+        rmSync(AUTH_DIR, { recursive: true, force: true })
+        setTimeout(start, 5000)
+        return
       }
       console.log('Conexão caiu, reconectando em 3 s…')
       setTimeout(start, 3000)
