@@ -28,7 +28,7 @@ export default function Gallery() {
   const [mine, setMine] = useState<Sticker[]>([])
   const [q, setQ] = useState(params.get('q') ?? '')
   const [dq, setDq] = useState(q)
-  const [f, setF] = useState<Filter>('todas')
+  const [f, setF] = useState<Filter>((['som', 'animada', 'estatica'].includes(params.get('filtro') ?? '') ? params.get('filtro') : 'todas') as Filter)
   const [sort, setSort] = useState<'new' | 'top'>('new')
   const [open, setOpen] = useState<Sticker | null>(null)
   const [remote, setRemote] = useState<Sticker[]>([])

@@ -350,6 +350,41 @@ export function createFlow({ sendSticker, log = console, fetchMedia = download }
     await ask(sock, s, 'Escolha o som (você ouve antes de confirmar):', [...MEME_SOUNDS.map(([l]) => l), OPT.searchSound])
   }
 
+
+  const lastReplyAt = new Map()
+  const REPLY_GAP_MS = 8 * 1000
+  const has = (t, words) => t.split(/\s+/).some((w) => words.some((x) => w.startsWith(x)))
+
+  /** Responde mensagens fora de uma conversa: comandos simples ou o menu. */
+  async function reply(sock, m, user, jid, c) {
+    const now = Date.now()
+    if (now - (lastReplyAt.get(user) || 0) < REPLY_GAP_MS) return // várias mensagens seguidas: uma resposta só
+    lastReplyAt.set(user, now)
+    const t = norm(textOf(m))
+    const left = remaining(user)
+    const quota = left === Infinity ? 'Você não tem limite.' : `Hoje você ainda pode fazer *${left} de ${DAILY_LIMIT}* aqui.`
+    let text
+    if (has(t, ['som', 'audio', 'barulho'])) {
+      text = `🔊 Todas as figurinhas *com som* estão aqui:\n${SITE}/galeria?filtro=som\n\nToque em uma e depois em *Receber no WhatsApp* que eu mando para você.\n\nPara fazer a sua com som, me mande uma foto, vídeo ou GIF.`
+    } else if (has(t, ['animada', 'gif', 'mexe'])) {
+      text = `🎞️ Figurinhas animadas:\n${SITE}/galeria?filtro=animada\n\nOu me mande um vídeo ou GIF que eu transformo em figurinha animada.`
+    } else if (has(t, ['lista', 'galeria', 'todas', 'catalogo', 'meme', 'figurinha', 'pacote'])) {
+      text = `📚 Galeria do Zapfig:\n${SITE}/galeria\n\nSó com som: ${SITE}/galeria?filtro=som\nPacotes: ${SITE}/galeria?aba=pacotes`
+    } else if (has(t, ['limite', 'quantas', 'restam', 'sobrou'])) {
+      text = `${quota}\nNo site é à vontade: ${SITE}/criar`
+    } else if (has(t, ['site', 'link'])) {
+      text = `🌐 ${SITE}\n\nCriar: ${SITE}/criar\nGaleria: ${SITE}/galeria`
+    } else if (has(t, ['obrigad', 'valeu', 'vlw', 'top', 'show', 'kkk', 'haha'])) {
+      text = 'Tamo junto! 😄 Quando quiser outra, é só mandar uma foto, vídeo ou GIF.'
+    } else {
+      const first = now - (helpSentAt.get(user) || 0) > HELP_EVERY_MS
+      helpSentAt.set(user, now)
+      const intro = c.stickerMessage ? 'Figurinha boa! 😄 ' : first ? 'Oi! Eu sou o robô do Zapfig 🤖\n\n' : ''
+      text = `${intro}Me mande uma *foto, vídeo ou GIF* que eu transformo em figurinha, com texto e som se quiser. ${quota}\n\nOutras coisas que eu entendo:\n• *som* → figurinhas com áudio\n• *galeria* → todas as figurinhas\n• *limite* → quantas ainda pode fazer\n• *site* → criar à vontade no site`
+    }
+    await say(sock, jid, text, m)
+  }
+
   /** Trata uma mensagem que não é código do site. Devolve true se foi tratada. */
   async function onMessage(sock, m) {
     const jid = m.key.remoteJid
@@ -361,13 +396,13 @@ export function createFlow({ sendSticker, log = console, fetchMedia = download }
       return true
     }
     const c = unwrap(m.message)
-    if (c.stickerMessage || c.reactionMessage || c.protocolMessage) return true // ignora figurinhas e reações
+    if (c.reactionMessage || c.protocolMessage || c.pollUpdateMessage) return true // ignora reações e avisos do sistema
     const media = mediaOf(m)
     if (media) {
       await startWithMedia(sock, m, user, jid, media)
       return true
     }
-    if (s && !['generating', 'cutting'].includes(s.stage)) {
+    if (s && !c.stickerMessage && !['generating', 'cutting'].includes(s.stage)) {
       if (['cancelar', 'sair', 'parar'].includes(norm(textOf(m)))) {
         end(s)
         await say(sock, jid, 'Cancelei. Quando quiser, é só mandar uma foto ou vídeo.')
@@ -376,15 +411,8 @@ export function createFlow({ sendSticker, log = console, fetchMedia = download }
       await safeStep(sock, s, m, null)
       return true
     }
-    // mensagem solta: explica como funciona (no máximo uma vez a cada HELP_EVERY_MIN minutos)
-    if (textOf(m) || audioOf(m)) {
-      const last = helpSentAt.get(user) || 0
-      if (Date.now() - last > HELP_EVERY_MS) {
-        helpSentAt.set(user, Date.now())
-        await say(sock, jid,
-          `Oi! Eu sou o robô do Zapfig 🤖\n\nMe mande uma *foto, vídeo ou GIF* que eu transformo em figurinha, com texto e som se você quiser. São ${DAILY_LIMIT} por dia.\n\nNo site dá para criar à vontade: ${SITE}`)
-      }
-    }
+    // mensagem solta (texto, áudio, figurinha, contato...): sempre responde, com limite anti-spam
+    await reply(sock, m, user, jid, c)
     return true
   }
 
