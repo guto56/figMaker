@@ -2,6 +2,7 @@ import sys
 from collections import deque
 from PIL import Image, ImageFilter
 def cutout(src, size=512, tol=30, outline=10, pad=18):
+    _refcache.clear()
     im = Image.open(src).convert('RGB').resize((size*2, size*2), Image.LANCZOS)
     W, H = im.size; px = im.load()
     a = Image.new('L', im.size, 255); ap = a.load()

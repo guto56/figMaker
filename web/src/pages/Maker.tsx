@@ -418,7 +418,7 @@ export default function Maker() {
             )}
             {!hasSource && (
               <label className="absolute inset-0 flex cursor-pointer flex-col items-center justify-center gap-3 p-8 text-center">
-                <img src="/seed/sapo.webp" alt="" className="h-24 w-24 opacity-90" />
+                <img src="/seed/perai.webp" alt="" className="h-24 w-24 opacity-90" />
                 <span className="text-lg">Solte aqui imagens, um GIF ou um vídeo</span>
                 <span className="text-muted">ou toque para escolher. Dá para escolher várias fotos de uma vez e colar com Ctrl+V.</span>
                 <input type="file" accept="image/*,video/*" multiple className="sr-only" onChange={(e) => { onFiles(e.target.files); e.target.value = '' }} />

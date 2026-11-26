@@ -6,11 +6,11 @@ import { SEED } from '../lib/seed'
 import type { Sticker } from '../lib/store'
 
 const pile = [
-  { id: 'seed-caramelo', x: '6%', y: '4%', w: '46%', r: '-6deg', d: '0ms' },
-  { id: 'seed-papagaio', x: '50%', y: '0%', w: '44%', r: '5deg', d: '90ms' },
-  { id: 'seed-gato', x: '0%', y: '48%', w: '38%', r: '4deg', d: '180ms' },
-  { id: 'seed-cafe', x: '34%', y: '40%', w: '40%', r: '-3deg', d: '270ms' },
-  { id: 'seed-galinha', x: '64%', y: '50%', w: '36%', r: '-8deg', d: '360ms' },
+  { id: 'seed-oxe', x: '6%', y: '4%', w: '46%', r: '-6deg', d: '0ms' },
+  { id: 'seed-sextou', x: '50%', y: '0%', w: '44%', r: '5deg', d: '90ms' },
+  { id: 'seed-bruh', x: '0%', y: '48%', w: '38%', r: '4deg', d: '180ms' },
+  { id: 'seed-kkkk', x: '34%', y: '40%', w: '40%', r: '-3deg', d: '270ms' },
+  { id: 'seed-parabens', x: '64%', y: '50%', w: '36%', r: '-8deg', d: '360ms' },
 ]
 
 function PileSticker({ s, p }: { s: Sticker; p: (typeof pile)[number] }) {
@@ -25,7 +25,7 @@ function PileSticker({ s, p }: { s: Sticker; p: (typeof pile)[number] }) {
       aria-pressed={playing}
     >
       <img src={s.webp as string} alt="" className={`w-full drop-shadow-[0_8px_14px_rgba(28,29,31,0.16)] ${playing ? 'playing' : ''}`} />
-      <span className="absolute bottom-[8%] right-[8%] inline-flex h-9 w-9 items-center justify-center rounded-full bg-ink text-paper">
+      <span className="absolute right-[4%] top-[4%] inline-flex h-9 w-9 items-center justify-center rounded-full bg-ink text-paper">
         <SoundIcon className="h-4 w-4" />
       </span>
     </button>
@@ -33,9 +33,9 @@ function PileSticker({ s, p }: { s: Sticker; p: (typeof pile)[number] }) {
 }
 
 const kinds = [
-  { id: 'seed-sapo', title: 'Figurinha de imagem', text: 'Uma foto ou print vira figurinha com fundo removido, contorno branco e texto de meme.' },
-  { id: 'seed-abacaxi', title: 'Figurinha animada', text: 'Um trecho de vídeo ou GIF vira WebP animada de até 10 segundos, comprimida para caber em 500 KB.' },
-  { id: 'seed-caramelo', title: 'Figurinha com som', text: 'Grave sua voz, envie um MP3 ou use o áudio do próprio vídeo. Sai em Opus, o formato que o WhatsApp toca.' },
+  { id: 'seed-confia', title: 'Figurinha de imagem', text: 'Uma foto ou print vira figurinha com fundo removido, contorno branco e texto de meme.' },
+  { id: 'seed-ganhei', title: 'Figurinha animada', text: 'Um trecho de vídeo ou GIF vira WebP animada de até 10 segundos, comprimida para caber em 500 KB.' },
+  { id: 'seed-chora-nao', title: 'Figurinha com som', text: 'Grave sua voz, envie um MP3 ou use o áudio do próprio vídeo. Sai em Opus, o formato que o WhatsApp toca.' },
 ]
 
 const steps = [
