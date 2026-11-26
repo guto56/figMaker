@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 
 const links = [
+  { to: '/robo', label: 'Robô no WhatsApp' },
   { to: '/galeria', label: 'Galeria' },
   { to: '/pacote/novo', label: 'Montar pacote' },
   { to: '/como-usar', label: 'Como usar' },
@@ -70,6 +71,7 @@ export function Layout() {
             <Link to="/criar" className="btn-ghost">Criar</Link>
             <Link to="/galeria" className="btn-ghost">Galeria</Link>
             <Link to="/como-usar" className="btn-ghost">Como usar</Link>
+            <Link to="/robo" className="btn-ghost">Robô no WhatsApp</Link>
           </nav>
         </div>
         <div className="wrap pb-8 text-sm text-muted">

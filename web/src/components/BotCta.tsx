@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { botChatLink } from '../lib/api'
 import { WhatsAppIcon } from './ReceiveWhatsApp'
 
@@ -23,9 +24,12 @@ export function BotCta({ compact = false }: { compact?: boolean }) {
           Mande uma foto, vídeo ou GIF para o robô do Zapfig. Ele pergunta se você quer texto e som, você escolhe tocando nas opções, e a figurinha chega pronta. São 3 por dia.
         </p>
       </div>
-      <a href={link} target="_blank" rel="noopener noreferrer" className="btn h-12 bg-[#1f7a4d] px-6 text-base text-paper hover:bg-[#17603c]">
-        <WhatsAppIcon /> Abrir conversa com o robô
-      </a>
+      <div className="flex flex-wrap gap-2">
+        <a href={link} target="_blank" rel="noopener noreferrer" className="btn h-12 bg-[#1f7a4d] px-6 text-base text-paper hover:bg-[#17603c]">
+          <WhatsAppIcon /> Abrir conversa com o robô
+        </a>
+        <Link to="/robo" className="btn h-12 px-5 text-[#17603c] hover:bg-[#d4ebdd]">Como funciona</Link>
+      </div>
     </section>
   )
 }

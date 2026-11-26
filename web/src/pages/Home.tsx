@@ -62,7 +62,7 @@ export default function Home() {
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link to="/criar" className="btn-main h-12 px-6 text-base">Criar figurinha</Link>
-            <Link to="/galeria" className="btn-soft h-12 px-6 text-base">Ver a galeria</Link>
+            <Link to="/robo" className="btn h-12 bg-[#1f7a4d] px-6 text-base text-paper hover:bg-[#17603c]">Fazer pelo WhatsApp</Link>
           </div>
           <dl className="mt-10 grid max-w-md grid-cols-3 gap-4 border-t border-line pt-5">
             <div><dt className="label">Tamanho</dt><dd className="mono mt-1 text-ink">512 × 512 px</dd></div>

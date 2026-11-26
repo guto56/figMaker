@@ -132,6 +132,12 @@ export const listPacks = () => get<{ items: RemotePack[] }>('/api/packs?limit=12
 let sendCfg: Promise<{ enabled: boolean; number: string | null }> | null = null
 const loadSendCfg = () => (sendCfg ??= get<{ enabled: boolean; number: string | null }>('/api/send/config').catch(() => ({ enabled: false, number: null })))
 export const sendConfig = () => loadSendCfg().then((d) => d.enabled)
+/** Número e link da conversa com o robô (null se o robô estiver desligado). */
+export const botInfo = () =>
+  loadSendCfg().then((d) => ({
+    number: d.enabled ? d.number : null,
+    link: d.enabled && d.number ? `https://wa.me/${d.number}?text=${encodeURIComponent('Oi! Quero fazer uma figurinha')}` : null,
+  }))
 /** Link para conversar com o robô e criar figurinha direto no WhatsApp. */
 export const botChatLink = () => loadSendCfg().then((d) => (d.enabled && d.number ? `https://wa.me/${d.number}?text=${encodeURIComponent('Oi! Quero fazer uma figurinha')}` : null))
 

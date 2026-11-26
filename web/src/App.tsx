@@ -9,6 +9,7 @@ const HowTo = lazy(() => import('./pages/HowTo'))
 const StickerPage = lazy(() => import('./pages/StickerPage'))
 const PackPage = lazy(() => import('./pages/PackPage'))
 const PackBuilder = lazy(() => import('./pages/PackBuilder'))
+const RobotPage = lazy(() => import('./pages/RobotPage'))
 
 function NotFound() {
   return (
@@ -32,6 +33,7 @@ export default function App() {
             <Route path="f/:id" element={<StickerPage />} />
             <Route path="p/:id" element={<PackPage />} />
             <Route path="pacote/novo" element={<PackBuilder />} />
+            <Route path="robo" element={<RobotPage />} />
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>
