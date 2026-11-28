@@ -2,6 +2,7 @@
 // foto/vídeo/GIF → texto? → som? (meu áudio ou som de meme, com prévia) → figurinha.
 // As escolhas são feitas tocando em enquetes; responder com o número ou o texto da opção também vale.
 import { downloadMediaMessage, jidNormalizedUser } from '@whiskeysockets/baileys'
+import sharp from 'sharp'
 import { DAILY_LIMIT, consume, remaining } from './limits.mjs'
 import { cutoutAvailable, removeBackground } from './cutout.mjs'
 import { STICKER_AUDIO_MAX, makeSticker, toStickerAudio, uniqueOgg } from './maker.mjs'
@@ -60,6 +61,8 @@ function unwrap(msg) {
 
 function mediaOf(m) {
   const c = unwrap(m.message)
+  // figurinha recebida: vira a base de uma figurinha nova (com texto e/ou som)
+  if (c.stickerMessage) return { type: 'sticker', ext: 'webp', size: Number(c.stickerMessage.fileLength || 0), animated: !!c.stickerMessage.isAnimated }
   if (c.imageMessage) return { type: 'image', ext: 'jpg', size: Number(c.imageMessage.fileLength || 0) }
   if (c.videoMessage) return { type: c.videoMessage.gifPlayback ? 'gif' : 'video', ext: 'mp4', size: Number(c.videoMessage.fileLength || 0) }
   const d = c.documentMessage
@@ -161,7 +164,10 @@ export function createFlow({ sendSticker, log = console, fetchMedia = download }
     else if (s.media.type !== 'image') await say(sock, jid, 'Gerando sua figurinha… vídeo leva uns segundinhos.')
     const job = queue.then(async () => {
       try {
-        const st = await makeSticker({ data: s.media.data, kind: s.media.type, ext: s.media.ext, text: s.text, textPosition: s.textPosition })
+        // figurinha recebida sem texto novo: usa o arquivo original (mantém a qualidade)
+        const st = s.media.sticker && !s.text
+          ? { webp: s.media.sticker, kind: s.media.animated ? 'animated' : 'static' }
+          : await makeSticker({ data: s.media.data, kind: s.media.type, ext: s.media.ext, text: s.text, textPosition: s.textPosition })
         await sendSticker(sock, jid, { webp: st.webp, kind: st.kind, ogg: s.audio || null }, undefined)
         log.log?.(`conversa: figurinha enviada (${st.kind}${s.audio ? `, com som ${s.audio.length} bytes` : ', sem som'})`)
         consume(s.user)
@@ -201,6 +207,21 @@ export function createFlow({ sendSticker, log = console, fetchMedia = download }
     } catch {
       end(s)
       await say(sock, jid, 'Não consegui baixar esse arquivo. Pode mandar de novo?', m)
+      return
+    }
+    if (s.media.type === 'sticker') {
+      // a figurinha já vem recortada: guarda o original e prepara uma versão editável
+      const original = s.media.data
+      try {
+        s.media = s.media.animated
+          ? { type: 'gif', ext: 'gif', data: await sharp(original, { animated: true }).gif().toBuffer(), sticker: original, animated: true }
+          : { type: 'image', ext: 'png', data: await sharp(original).png().toBuffer(), sticker: original, animated: false }
+      } catch {
+        end(s)
+        await say(sock, jid, 'Não consegui abrir essa figurinha. Tente com outra, ou mande uma foto ou vídeo.', m)
+        return
+      }
+      await askText(sock, s, 'Bora transformar essa figurinha! Quer escrever um texto nela? (depois você escolhe o som)')
       return
     }
     if (s.media.type === 'image' && cutoutAvailable()) {

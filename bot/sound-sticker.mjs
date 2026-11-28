@@ -61,7 +61,7 @@ export function attachAudio(stickerMessage, audioMessage) {
   const bytes = proto.Message.AudioMessage.encode(audioMessage).finish()
   audioBySticker.set(key, bytes)
   // a figurinha pode ser reenviada (novas tentativas, outros aparelhos); limpa depois
-  setTimeout(() => audioBySticker.delete(key), 10 * 60 * 1000).unref?.()
+  setTimeout(() => audioBySticker.delete(key), 30 * 60 * 1000).unref?.()
 }
 
 /** Onda sintética de 64 pontos (o WhatsApp só usa para desenhar). */

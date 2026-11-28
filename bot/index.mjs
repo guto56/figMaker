@@ -72,9 +72,32 @@ async function fetchJob(code) {
   return { ...job, webp, ogg }
 }
 
+// mensagens enviadas ficam guardadas 30 min: quando o celular de quem recebe não
+// consegue abrir uma mensagem, ele pede de novo e o Baileys reenvia a partir daqui
+const SENT_TTL = 30 * 60 * 1000
+const sent = new Map()
+function remember(id, message) {
+  if (!id || !message) return
+  sent.set(id, message)
+  setTimeout(() => sent.delete(id), SENT_TTL).unref?.()
+}
+
+/** Tenta de novo quando o envio do arquivo ao WhatsApp falha (rede instável). */
+async function retry(fn, tries = 3) {
+  for (let i = 1; ; i++) {
+    try {
+      return await fn()
+    } catch (e) {
+      if (i >= tries) throw e
+      console.error(`envio falhou (tentativa ${i}): ${e?.message}`)
+      await sleep(1500 * i)
+    }
+  }
+}
+
 async function sendSticker(sock, jid, job, quoted) {
   const upload = { upload: sock.waUploadToServer }
-  const media = await prepareWAMessageMedia({ sticker: job.webp, isAnimated: job.kind === 'animated' }, upload)
+  const media = await retry(() => prepareWAMessageMedia({ sticker: job.webp, isAnimated: job.kind === 'animated' }, upload))
   media.stickerMessage.isAnimated = job.kind === 'animated'
   if (job.ogg) {
     // arquivo único a cada envio (a prévia e reenvios da mesma figurinha usam o mesmo som)
@@ -82,7 +105,7 @@ async function sendSticker(sock, jid, job, quoted) {
     let ogg = job.ogg
     if (ogg.length > 30000 || oggSeconds(ogg) > STICKER_AUDIO_MAX) ogg = await toStickerAudio(ogg, 'ogg', STICKER_AUDIO_MAX).catch(() => ogg)
     job = { ...job, ogg: await uniqueOgg(ogg).catch(() => ogg) }
-    const { audioMessage } = await prepareWAMessageMedia({ audio: job.ogg, mimetype: 'audio/ogg; codecs=opus' }, upload)
+    const { audioMessage } = await retry(() => prepareWAMessageMedia({ audio: job.ogg, mimetype: 'audio/ogg; codecs=opus' }, upload))
     // igual ao áudio de uma figurinha com som feita no app: sem ptt e sem waveform
     audioMessage.mimetype = 'audio/ogg; codecs=opus'
     audioMessage.seconds = oggSeconds(job.ogg)
@@ -95,6 +118,7 @@ async function sendSticker(sock, jid, job, quoted) {
   if (job.ogg) content.messageContextInfo = { messageSecret: randomBytes(32) }
   const msg = generateWAMessageFromContent(jid, content, { userJid: sock.user?.id, quoted })
   await sock.relayMessage(jid, msg.message, { messageId: msg.key.id })
+  remember(msg.key.id, msg.message)
 }
 
 // criar figurinha pela conversa (foto/vídeo → texto → som → figurinha)
@@ -143,7 +167,16 @@ async function start() {
     browser: Browsers.macOS('Chrome'),
     markOnlineOnConnect: false,
     syncFullHistory: false,
+    // reenvio quando o celular de quem recebe pede a mensagem de novo
+    getMessage: async (key) => sent.get(key.id),
   })
+  // guarda tudo o que o robô manda (textos, enquetes, prévias de áudio); áudio tenta de novo se falhar
+  const rawSend = sock.sendMessage.bind(sock)
+  sock.sendMessage = async (jid, content, opts) => {
+    const r = await (content?.audio ? retry(() => rawSend(jid, content, opts)) : rawSend(jid, content, opts))
+    remember(r?.key?.id, r?.message)
+    return r
+  }
   sock.ev.on('creds.update', saveCreds)
 
   let pairingAsked = false
