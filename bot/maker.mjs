@@ -106,23 +106,3 @@ export async function uniqueOgg(data) {
     return readFile(output)
   })
 }
-
-/**
- * Figurinha parada → WebP animada de 2 quadros iguais. As figurinhas com som que o
- * próprio WhatsApp cria vêm sempre marcadas como animadas; parada com som às vezes
- * não toca no iPhone.
- */
-export async function stillToAnimated(webp) {
-  return withTmp(async (dir) => {
-    const input = join(dir, 'parada.webp')
-    const png = join(dir, 'quadro.png')
-    const output = join(dir, 'animada.webp')
-    await writeFile(input, webp)
-    await ffmpeg(['-i', input, '-frames:v', '1', png])
-    for (const q of [80, 65, 50, 35]) {
-      await ffmpeg(['-loop', '1', '-t', '2', '-i', png, '-vf', 'fps=1,format=rgba', '-c:v', 'libwebp', '-loop', '0', '-quality', String(q), '-lossless', '0', output])
-      if ((await stat(output)).size <= 200 * 1024) break
-    }
-    return readFile(output)
-  })
-}
