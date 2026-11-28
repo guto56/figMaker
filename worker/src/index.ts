@@ -567,18 +567,37 @@ async function botRoute(req: Request, env: Env, code: string, part?: string) {
 /* ---------------- saúde do robô ---------------- */
 // O robô manda um "estou vivo" a cada minuto; um cron confere a cada 5 minutos e avisa o dono
 // (notificação no app ntfy) quando ele cai e quando volta.
-type Heartbeat = { at: number; connected: boolean; since: number }
+type Heartbeat = { at: number; connected: boolean; since: number; version?: string; updatedAt?: number; updateError?: string }
 type AlertState = { down: boolean; at: number; reason?: string }
+
+/** Dono pede atualização do robô (mesmo token do robô). GET mostra o estado. */
+async function requestUpdate(req: Request, env: Env) {
+  const auth = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
+  if (!env.BOT_TOKEN || !auth || !(await sameHash(await sha(auth), await sha(env.BOT_TOKEN)))) return err('Não autorizado.', 401)
+  await env.FILES.put('bot:update', String(Date.now()), { expirationTtl: 3600 })
+  return json({ ok: true, hb: await env.FILES.get<Heartbeat>('bot:hb', 'json') })
+}
 
 async function heartbeat(req: Request, env: Env) {
   const auth = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
   if (!env.BOT_TOKEN || !auth || !(await sameHash(await sha(auth), await sha(env.BOT_TOKEN)))) return err('Não autorizado.', 401)
-  const body = (await req.json().catch(() => ({}))) as { connected?: boolean }
+  const body = (await req.json().catch(() => ({}))) as { connected?: boolean; version?: string; updateError?: string }
   const prev = await env.FILES.get<Heartbeat>('bot:hb', 'json')
   const connected = !!body.connected
-  const hb: Heartbeat = { at: Date.now(), connected, since: prev && prev.connected === connected ? prev.since : Date.now() }
+  const version = typeof body.version === 'string' ? body.version.slice(0, 12) : undefined
+  const hb: Heartbeat = {
+    at: Date.now(),
+    connected,
+    since: prev && prev.connected === connected ? prev.since : Date.now(),
+    version,
+    updatedAt: version && prev?.version && prev.version !== version ? Date.now() : prev?.updatedAt,
+    updateError: typeof body.updateError === 'string' ? body.updateError.slice(0, 300) : undefined,
+  }
   await env.FILES.put('bot:hb', JSON.stringify(hb))
-  return json({ ok: true })
+  // atualização pedida pelo dono: o robô baixa a versão nova e reinicia (uma vez)
+  const update = await env.FILES.get('bot:update')
+  if (update) await env.FILES.delete('bot:update')
+  return json({ ok: true, update: !!update })
 }
 
 async function notify(env: Env, title: string, message: string, priority: 'high' | 'default') {
@@ -636,6 +655,7 @@ async function route(req: Request, env: Env, url: URL): Promise<Response> {
   if (p === '/api/proxy' || p === '/api/img') return await proxy(url)
   if (p.startsWith('/api/f/')) return await file(env, p.slice(7))
   if (p === '/api/bot/heartbeat' && method === 'POST') return await heartbeat(req, env)
+  if (p === '/api/bot/update' && method === 'POST') return await requestUpdate(req, env)
   if (p === '/api/send/config') return json({ enabled: !!(waNumber(env) && env.BOT_TOKEN), number: waNumber(env) || null }, 200, { 'cache-control': 'public, max-age=60' })
   if (p === '/api/send' && method === 'POST') return await createSend(req, env)
   const b = p.match(/^\/api\/bot\/send\/([^/]+)(?:\/(webp|ogg|done))?$/)

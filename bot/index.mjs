@@ -12,13 +12,15 @@ import {
   useMultiFileAuthState,
 } from '@whiskeysockets/baileys'
 import { randomBytes } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
+import { join } from 'node:path'
 import { rmSync } from 'node:fs'
 import pino from 'pino'
 import qrcode from 'qrcode-terminal'
 import { createFlow } from './flow.mjs'
 import { STICKER_AUDIO_MAX, toStickerAudio, uniqueOgg } from './maker.mjs'
 import { inspectIncomingStickers } from './inspect.mjs'
-import { attachAudio, oggSeconds, patchStickerEncoder } from './sound-sticker.mjs'
+import { attachAudio, oggSeconds, patchStickerEncoder, uniqueWebp } from './sound-sticker.mjs'
 
 const API = (process.env.ZAPFIG_API || 'https://zapfig.site').replace(/\/$/, '')
 const TOKEN = process.env.BOT_TOKEN
@@ -50,8 +52,46 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 // sinal de vida para o site (alerta ao dono se o robô cair)
 let connected = false
+// versão do código (commit) e atualização remota: quando o dono pede pelo site, o robô
+// baixa a versão nova da branch, instala dependências se mudaram e reinicia (systemd liga de novo)
+const REPO = new URL('..', import.meta.url).pathname
+const BRANCH = process.env.BRANCH || 'claude/keen-cray-naswc6'
+const git = (...a) => execFileSync('git', ['-C', REPO, ...a], { encoding: 'utf8', timeout: 120_000 }).trim()
+let VERSION = ''
+try { VERSION = git('rev-parse', '--short=7', 'HEAD') } catch { /* sem git */ }
+let updateError = ''
+let updating = false
+
+function selfUpdate() {
+  if (updating) return
+  updating = true
+  try {
+    const lockBefore = git('hash-object', 'bot/package-lock.json')
+    git('fetch', '-q', '--depth', '1', 'origin', BRANCH)
+    const next = git('rev-parse', '--short=7', 'FETCH_HEAD')
+    if (next === VERSION) {
+      updating = false
+      return
+    }
+    git('checkout', '-q', '-f', 'FETCH_HEAD')
+    if (git('hash-object', 'bot/package-lock.json') !== lockBefore) {
+      execFileSync('npm', ['ci', '--omit=dev'], { cwd: join(REPO, 'bot'), stdio: 'ignore', timeout: 600_000 })
+    }
+    console.log(`atualizado ${VERSION} -> ${next}, reiniciando…`)
+    process.exit(0)
+  } catch (e) {
+    updateError = String(e?.message || e).slice(0, 300)
+    console.error('atualização falhou:', updateError)
+    updating = false
+  }
+}
+
 async function heartbeat() {
-  await api('/api/bot/heartbeat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ connected }) }).catch(() => {})
+  try {
+    const r = await api('/api/bot/heartbeat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ connected, version: VERSION, updateError: updateError || undefined }) })
+    const d = await r.json().catch(() => ({}))
+    if (d.update) selfUpdate()
+  } catch { /* site fora do ar: tenta no próximo minuto */ }
 }
 setInterval(heartbeat, 60_000).unref?.()
 const handled = new Set()
@@ -97,6 +137,8 @@ async function retry(fn, tries = 3) {
 
 async function sendSticker(sock, jid, job, quoted) {
   const upload = { upload: sock.waUploadToServer }
+  // arquivo único a cada envio: a mesma foto não pode virar a mesma figurinha (celular reaproveita a antiga)
+  job = { ...job, webp: uniqueWebp(job.webp) }
   const media = await retry(() => prepareWAMessageMedia({ sticker: job.webp, isAnimated: job.kind === 'animated' }, upload))
   media.stickerMessage.isAnimated = job.kind === 'animated'
   if (job.ogg) {
